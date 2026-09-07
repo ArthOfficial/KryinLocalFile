@@ -118,7 +118,7 @@
             const data = await res.json();
 
             isHostUser = Boolean(data.isHost);
-            currentLanUrl = data.lanUrl || `http://${data.serverIp}:${data.port || 3000}`;
+            currentLanUrl = data.lanUrl || `http://${data.serverIp}:${data.port || 20260}`;
 
             const dot = connectionBadge.querySelector('.status-dot');
 
@@ -130,9 +130,15 @@
                 }
                 if (adminLanIp) adminLanIp.textContent = data.serverIp || '127.0.0.1';
                 if (adminLanUrl) adminLanUrl.textContent = currentLanUrl;
-                if (adminServerPort) adminServerPort.textContent = data.port || 3000;
-                if (currentPortText) currentPortText.textContent = data.port || 3000;
-                if (editPortInput) editPortInput.value = data.port || 3000;
+                if (adminServerPort) adminServerPort.textContent = data.port || 20260;
+                if (currentPortText) currentPortText.textContent = data.port || 20260;
+                if (editPortInput) editPortInput.value = data.port || 20260;
+
+                // Inform host user if server auto-shifted ports due to a port conflict
+                if (data.fallbackFromPort && !window.__portFallbackAlertShown) {
+                    window.__portFallbackAlertShown = true;
+                    showToast(`Port ${data.fallbackFromPort} was occupied by another application. Server automatically started on port ${data.port}.`, 'warning', 'Port Auto-Assigned');
+                }
             } else {
                 dot.className = 'status-dot client';
                 connectionLabel.textContent = 'Connected via LAN';
@@ -711,7 +717,7 @@
                 portViewMode.style.display = 'none';
                 portEditMode.style.display = 'inline-flex';
                 if (editPortInput) {
-                    editPortInput.value = currentPortText ? currentPortText.textContent.trim() : '3000';
+                    editPortInput.value = currentPortText ? currentPortText.textContent.trim() : '20260';
                     editPortInput.focus();
                     editPortInput.select();
                 }
