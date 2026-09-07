@@ -6,6 +6,12 @@ const indexHtmlB64 = Buffer.from(fs.readFileSync(path.join(publicDir, 'index.htm
 const styleCssB64 = Buffer.from(fs.readFileSync(path.join(publicDir, 'style.css'), 'utf8')).toString('base64');
 const appJsB64 = Buffer.from(fs.readFileSync(path.join(publicDir, 'app.js'), 'utf8')).toString('base64');
 
+const logoPngPath = path.join(publicDir, 'logo.png');
+const logoPngB64 = fs.existsSync(logoPngPath) ? fs.readFileSync(logoPngPath).toString('base64') : '';
+
+const faviconIcoPath = path.join(publicDir, 'favicon.ico');
+const faviconIcoB64 = fs.existsSync(faviconIcoPath) ? fs.readFileSync(faviconIcoPath).toString('base64') : '';
+
 const content = `// Kryin Local File Hub - Embedded Assets
 // Copyright (c) 2026 Kryin
 
@@ -14,7 +20,9 @@ const _d = (b64) => Buffer.from(b64, 'base64').toString('utf8');
 const _assets = {
     _h: "${indexHtmlB64}",
     _s: "${styleCssB64}",
-    _j: "${appJsB64}"
+    _j: "${appJsB64}",
+    _logo: "${logoPngB64}",
+    _ico: "${faviconIcoB64}"
 };
 
 let _html = null, _css = null, _js = null;
@@ -23,9 +31,11 @@ module.exports = {
     get indexHtml() { if (!_html) _html = _d(_assets._h); return _html; },
     get styleCss() { if (!_css) _css = _d(_assets._s); return _css; },
     get appJs() { if (!_js) _js = _d(_assets._j); return _js; },
+    get logoPng() { return _assets._logo; },
+    get faviconIco() { return _assets._ico; },
     rawAssets: _assets
 };
 `;
 
 fs.writeFileSync(path.join(__dirname, 'embeddedAssets.js'), content, 'utf8');
-console.log('Kryin embedded assets compiled successfully.');
+console.log('Kryin embedded assets compiled successfully (with custom logo and favicon).');

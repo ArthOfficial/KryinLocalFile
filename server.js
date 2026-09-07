@@ -55,6 +55,43 @@ if (fs.existsSync(configPath)) {
     }
 }
 
+const INSTANCE_LOCK_FILE = path.join(os.tmpdir(), 'kryin-hub.lock');
+
+// Instant Single-Instance Check (< 5ms): Brings up browser and prevents duplicates on repeated double-clicks
+function checkSingleInstance() {
+    if (fs.existsSync(INSTANCE_LOCK_FILE)) {
+        try {
+            const data = JSON.parse(fs.readFileSync(INSTANCE_LOCK_FILE, 'utf8'));
+            if (data && data.pid && data.pid !== process.pid) {
+                let isAlive = false;
+                try {
+                    process.kill(data.pid, 0);
+                    isAlive = true;
+                } catch (e) {
+                    isAlive = false;
+                }
+                if (isAlive) {
+                    const targetPort = data.port || config.port || 20260;
+                    const isBackground = process.argv.includes('--background') || process.argv.includes('-b') || process.argv.includes('--silent');
+                    if (!isBackground && config.autoOpenBrowser !== false) {
+                        try {
+                            if (process.platform === 'win32') {
+                                exec(`start "" "http://localhost:${targetPort}"`, { windowsHide: true });
+                            } else if (process.platform === 'darwin') {
+                                exec(`open http://localhost:${targetPort}`);
+                            } else {
+                                exec(`xdg-open http://localhost:${targetPort}`);
+                            }
+                        } catch (e) {}
+                    }
+                    process.exit(0);
+                }
+            }
+        } catch (e) {}
+    }
+}
+checkSingleInstance();
+
 let PORT = process.env.PORT || config.port || 20260;
 let ADMIN_PASSWORD = config.adminPassword || 'kryinadmin';
 let HOST_ACTION_PASSWORD = config.hostActionPassword || '2026';
@@ -117,6 +154,30 @@ app.get('/', (req, res) => {
     if (embeddedAssets && embeddedAssets.indexHtml) {
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.send(embeddedAssets.indexHtml);
+    }
+    res.status(404).send('Not found');
+});
+
+app.get('/favicon.ico', (req, res) => {
+    const diskPath = path.join(PUBLIC_DIR, 'favicon.ico');
+    if (fs.existsSync(diskPath)) {
+        return res.sendFile(diskPath);
+    }
+    if (embeddedAssets && embeddedAssets.faviconIco) {
+        res.setHeader('Content-Type', 'image/x-icon');
+        return res.send(Buffer.from(embeddedAssets.faviconIco, 'base64'));
+    }
+    res.status(404).send('Not found');
+});
+
+app.get('/logo.png', (req, res) => {
+    const diskPath = path.join(PUBLIC_DIR, 'logo.png');
+    if (fs.existsSync(diskPath)) {
+        return res.sendFile(diskPath);
+    }
+    if (embeddedAssets && embeddedAssets.logoPng) {
+        res.setHeader('Content-Type', 'image/png');
+        return res.send(Buffer.from(embeddedAssets.logoPng, 'base64'));
     }
     res.status(404).send('Not found');
 });
@@ -713,124 +774,317 @@ const handleShutdown = (req, res) => {
 app.post('/api/admin/shutdown', handleShutdown);
 app.post('/api/system/shutdown', handleShutdown);
 
-// Windows System Tray Integration (Tray Icon in Taskbar Notification Area with Right-Click Menu)
-let trayProcess = null;
+// Windows Companion Controller & System Tray Integration
+let controllerProcess = null;
 
-function startSystemTray(port, lanUrl) {
+function startCompanionController(port, lanUrl) {
     if (process.platform !== 'win32') return;
-    if (trayProcess) {
-        try { trayProcess.kill(); } catch (e) {}
+    if (controllerProcess) {
+        try { controllerProcess.kill(); } catch (e) {}
     }
 
     try {
-        const trayScriptPath = path.join(os.tmpdir(), 'kryin-tray.ps1');
+        const isBackground = process.argv.includes('--background') || process.argv.includes('-b') || process.argv.includes('--silent');
 
-        const psTrayScript = `param (
-    [int]$ServerPid = 0,
+        // Locate or extract app icon (.ico) and logo (.png)
+        let iconPath = path.join(ROOT_DIR, 'app-icon.ico');
+        if (!fs.existsSync(iconPath)) {
+            const exeIcon = path.join(path.dirname(process.execPath), 'app-icon.ico');
+            if (fs.existsSync(exeIcon)) iconPath = exeIcon;
+        }
+        if (!fs.existsSync(iconPath) && embeddedAssets && embeddedAssets.faviconIco) {
+            iconPath = path.join(os.tmpdir(), 'kryin-app-icon.ico');
+            try { fs.writeFileSync(iconPath, Buffer.from(embeddedAssets.faviconIco, 'base64')); } catch (e) {}
+        }
+
+        let logoPath = path.join(PUBLIC_DIR, 'logo.png');
+        if (!fs.existsSync(logoPath) && embeddedAssets && embeddedAssets.logoPng) {
+            logoPath = path.join(os.tmpdir(), 'kryin-logo.png');
+            try { fs.writeFileSync(logoPath, Buffer.from(embeddedAssets.logoPng, 'base64')); } catch (e) {}
+        }
+
+        const controllerScriptPath = path.join(os.tmpdir(), 'kryin-controller.ps1');
+
+        const safeIcon = (iconPath || '').replace(/'/g, "''");
+        const safeLogo = (logoPath || '').replace(/'/g, "''");
+
+        const psScript = `param (
+    [int]$ServerPid = ${process.pid},
     [int]$Port = ${port},
-    [string]$LanUrl = "${lanUrl}"
+    [string]$LanUrl = "${lanUrl}",
+    [string]$IconPath = "${safeIcon}",
+    [string]$LogoPath = "${safeLogo}",
+    [bool]$StartHidden = ${isBackground ? '$true' : '$false'}
 )
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
+[System.Windows.Forms.Application]::EnableVisualStyles()
+
+$form = New-Object System.Windows.Forms.Form
+$form.Text = "Kryin Local File Hub"
+$form.Size = New-Object System.Drawing.Size 420, 290
+$form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
+$form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
+$form.MaximizeBox = $false
+$form.MinimizeBox = $true
+$form.ShowInTaskbar = $true
+$form.BackColor = [System.Drawing.Color]::FromArgb(255, 15, 23, 42)
+$form.ForeColor = [System.Drawing.Color]::FromArgb(255, 241, 245, 249)
+
+# Load Application Icon
+$appIcon = $null
+if ($IconPath -and (Test-Path $IconPath)) {
+    try {
+        $appIcon = New-Object System.Drawing.Icon $IconPath
+        $form.Icon = $appIcon
+    } catch {}
+}
+
+# Top Brand Panel
+$topPanel = New-Object System.Windows.Forms.Panel
+$topPanel.Size = New-Object System.Drawing.Size 420, 68
+$topPanel.Location = New-Object System.Drawing.Point 0, 0
+$topPanel.BackColor = [System.Drawing.Color]::FromArgb(255, 23, 37, 68)
+
+# Logo PictureBox
+if ($LogoPath -and (Test-Path $LogoPath)) {
+    try {
+        $logoBox = New-Object System.Windows.Forms.PictureBox
+        $logoBox.Size = New-Object System.Drawing.Size 42, 42
+        $logoBox.Location = New-Object System.Drawing.Point 16, 13
+        $logoBox.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::Zoom
+        $logoBox.Image = [System.Drawing.Image]::FromFile($LogoPath)
+        $topPanel.Controls.Add($logoBox)
+    } catch {}
+}
+
+# Title Label
+$titleLabel = New-Object System.Windows.Forms.Label
+$titleLabel.Text = "Kryin Local File Hub"
+$titleLabel.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
+$titleLabel.ForeColor = [System.Drawing.Color]::White
+$titleLabel.Location = New-Object System.Drawing.Point 68, 14
+$titleLabel.AutoSize = $true
+$topPanel.Controls.Add($titleLabel)
+
+# Subtitle / Status
+$subLabel = New-Object System.Windows.Forms.Label
+$subLabel.Text = "● Active on Port $Port"
+$subLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Regular)
+$subLabel.ForeColor = [System.Drawing.Color]::FromArgb(255, 52, 211, 153)
+$subLabel.Location = New-Object System.Drawing.Point 69, 38
+$subLabel.AutoSize = $true
+$topPanel.Controls.Add($subLabel)
+
+$form.Controls.Add($topPanel)
+
+# LAN URL info box
+$lanLabel = New-Object System.Windows.Forms.Label
+$lanLabel.Text = "LAN Access URL (Share with devices on Wi-Fi):"
+$lanLabel.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
+$lanLabel.ForeColor = [System.Drawing.Color]::FromArgb(255, 148, 163, 184)
+$lanLabel.Location = New-Object System.Drawing.Point 16, 82
+$lanLabel.AutoSize = $true
+$form.Controls.Add($lanLabel)
+
+$lanBox = New-Object System.Windows.Forms.TextBox
+$lanBox.Text = $LanUrl
+$lanBox.ReadOnly = $true
+$lanBox.BackColor = [System.Drawing.Color]::FromArgb(255, 30, 41, 59)
+$lanBox.ForeColor = [System.Drawing.Color]::FromArgb(255, 56, 189, 248)
+$lanBox.Font = New-Object System.Drawing.Font("Consolas", 10, [System.Drawing.FontStyle]::Bold)
+$lanBox.Location = New-Object System.Drawing.Point 16, 104
+$lanBox.Size = New-Object System.Drawing.Size 280, 26
+$lanBox.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+$form.Controls.Add($lanBox)
+
+$copyBtn = New-Object System.Windows.Forms.Button
+$copyBtn.Text = "Copy"
+$copyBtn.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$copyBtn.Location = New-Object System.Drawing.Point 304, 102
+$copyBtn.Size = New-Object System.Drawing.Size 88, 28
+$copyBtn.BackColor = [System.Drawing.Color]::FromArgb(255, 37, 99, 235)
+$copyBtn.ForeColor = [System.Drawing.Color]::White
+$copyBtn.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+$copyBtn.FlatAppearance.BorderSize = 0
+$copyBtn.Add_Click({
+    [System.Windows.Forms.Clipboard]::SetText($LanUrl)
+    $copyBtn.Text = "Copied!"
+    $t = New-Object System.Windows.Forms.Timer
+    $t.Interval = 1500
+    $t.Add_Tick({
+        $copyBtn.Text = "Copy"
+        $t.Stop()
+        $t.Dispose()
+    })
+    $t.Start()
+})
+$form.Controls.Add($copyBtn)
+
+# Action Buttons
+$browserBtn = New-Object System.Windows.Forms.Button
+$browserBtn.Text = "🌐 Open in Browser"
+$browserBtn.Font = New-Object System.Drawing.Font("Segoe UI", 9.5, [System.Drawing.FontStyle]::Bold)
+$browserBtn.Location = New-Object System.Drawing.Point 16, 150
+$browserBtn.Size = New-Object System.Drawing.Size 185, 36
+$browserBtn.BackColor = [System.Drawing.Color]::FromArgb(255, 30, 41, 59)
+$browserBtn.ForeColor = [System.Drawing.Color]::White
+$browserBtn.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+$browserBtn.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(255, 71, 85, 105)
+$browserBtn.Add_Click({
+    Start-Process "http://localhost:$Port"
+})
+$form.Controls.Add($browserBtn)
+
+$configBtn = New-Object System.Windows.Forms.Button
+$configBtn.Text = "⚙️ Settings / Port"
+$configBtn.Font = New-Object System.Drawing.Font("Segoe UI", 9.5)
+$configBtn.Location = New-Object System.Drawing.Point 207, 150
+$configBtn.Size = New-Object System.Drawing.Size 185, 36
+$configBtn.BackColor = [System.Drawing.Color]::FromArgb(255, 30, 41, 59)
+$configBtn.ForeColor = [System.Drawing.Color]::White
+$configBtn.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+$configBtn.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(255, 71, 85, 105)
+$configBtn.Add_Click({
+    Start-Process "notepad.exe" -ArgumentList "config.json"
+})
+$form.Controls.Add($configBtn)
+
+# Stop Server button
+$stopBtn = New-Object System.Windows.Forms.Button
+$stopBtn.Text = "🛑 Stop Server"
+$stopBtn.Font = New-Object System.Drawing.Font("Segoe UI", 9.5, [System.Drawing.FontStyle]::Bold)
+$stopBtn.Location = New-Object System.Drawing.Point 16, 198
+$stopBtn.Size = New-Object System.Drawing.Size 376, 36
+$stopBtn.BackColor = [System.Drawing.Color]::FromArgb(255, 239, 68, 68)
+$stopBtn.ForeColor = [System.Drawing.Color]::White
+$stopBtn.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+$stopBtn.FlatAppearance.BorderSize = 0
+$stopBtn.Add_Click({
+    if ($ServerPid -gt 0) {
+        Stop-Process -Id $ServerPid -Force -ErrorAction SilentlyContinue
+    }
+    $form.Close()
+})
+$form.Controls.Add($stopBtn)
+
+# System Tray NotifyIcon
 $notify = New-Object System.Windows.Forms.NotifyIcon
-$notify.Icon = [System.Drawing.SystemIcons]::Application
+if ($appIcon) {
+    $notify.Icon = $appIcon
+} else {
+    $notify.Icon = [System.Drawing.SystemIcons]::Application
+}
 $notify.Text = "Kryin Local File Hub - Port $Port"
 $notify.Visible = $true
 
-# Context Menu (Right-Click like Docker / OneDrive)
+# Context Menu
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
+$mTitle = $menu.Items.Add("Kryin Local File Hub (v2026)")
+$mTitle.Enabled = $false
+$null = $menu.Items.Add("-")
+$mOpen = $menu.Items.Add("Open in Browser")
+$mOpen.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$mOpen.Add_Click({ Start-Process "http://localhost:$Port" })
 
-$header = $menu.Items.Add("Kryin Local File Hub (v2026)")
-$header.Enabled = $false
-
-$sep0 = $menu.Items.Add("-")
-
-$menuOpen = $menu.Items.Add("Open in Browser")
-$menuOpen.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$menuOpen.Add_Click({
-    Start-Process "http://localhost:$Port"
+$mShow = $menu.Items.Add("Show Controller")
+$mShow.Add_Click({
+    $form.WindowState = [System.Windows.Forms.FormWindowState]::Normal
+    $form.BringToFront()
+    $form.Activate()
 })
 
-$menuLan = $menu.Items.Add("Copy LAN Link ($LanUrl)")
-$menuLan.Add_Click({
+$mLan = $menu.Items.Add("Copy LAN Link")
+$mLan.Add_Click({
     [System.Windows.Forms.Clipboard]::SetText($LanUrl)
     $notify.ShowBalloonTip(2000, "Kryin Local File Hub", "LAN URL copied to clipboard!\`n$LanUrl", [System.Windows.Forms.ToolTipIcon]::Info)
 })
 
-$menuConfig = $menu.Items.Add("Settings / Change Port (config.json)")
-$menuConfig.Add_Click({
-    Start-Process "notepad.exe" -ArgumentList "config.json"
-})
+$mConfig = $menu.Items.Add("Settings / Change Port (config.json)")
+$mConfig.Add_Click({ Start-Process "notepad.exe" -ArgumentList "config.json" })
 
-$sep1 = $menu.Items.Add("-")
-
-$menuStop = $menu.Items.Add("Stop Server")
-$menuStop.ForeColor = [System.Drawing.Color]::Red
-$menuStop.Add_Click({
+$null = $menu.Items.Add("-")
+$mStop = $menu.Items.Add("Stop Server")
+$mStop.ForeColor = [System.Drawing.Color]::Red
+$mStop.Add_Click({
     $notify.Visible = $false
     if ($ServerPid -gt 0) {
         Stop-Process -Id $ServerPid -Force -ErrorAction SilentlyContinue
     }
-    [System.Windows.Forms.Application]::Exit()
+    $form.Close()
 })
-
 $notify.ContextMenuStrip = $menu
 
-# Left double-click opens browser
+# Double click tray icon restores controller
 $notify.Add_DoubleClick({
-    Start-Process "http://localhost:$Port"
+    $form.WindowState = [System.Windows.Forms.FormWindowState]::Normal
+    $form.BringToFront()
+    $form.Activate()
 })
 
-# Balloon notification near taskbar tray arrow
-$notify.ShowBalloonTip(3000, "Kryin Local File Hub", "Server active on port $Port.\`nRight-click this tray icon to manage or stop.", [System.Windows.Forms.ToolTipIcon]::Info)
+# Form closing event stops server cleanly
+$form.Add_FormClosing({
+    $notify.Visible = $false
+    $notify.Dispose()
+    if ($ServerPid -gt 0) {
+        Stop-Process -Id $ServerPid -Force -ErrorAction SilentlyContinue
+    }
+})
 
 # Watch parent server process
-$timer = New-Object System.Windows.Forms.Timer
-$timer.Interval = 1000
-$timer.Add_Tick({
-    if ($ServerPid -gt 0) {
+if ($ServerPid -gt 0) {
+    $timer = New-Object System.Windows.Forms.Timer
+    $timer.Interval = 1500
+    $timer.Add_Tick({
         $p = Get-Process -Id $ServerPid -ErrorAction SilentlyContinue
         if (-not $p) {
             $notify.Visible = $false
+            $notify.Dispose()
+            $form.Close()
             [System.Windows.Forms.Application]::Exit()
         }
-    }
-})
-$timer.Start()
+    })
+    $timer.Start()
+}
 
-[System.Windows.Forms.Application]::Run()
+if ($StartHidden) {
+    $form.WindowState = [System.Windows.Forms.FormWindowState]::Minimized
+    $form.ShowInTaskbar = $false
+}
+
+[System.Windows.Forms.Application]::Run($form)
 `;
 
-        fs.writeFileSync(trayScriptPath, psTrayScript, 'utf8');
+        fs.writeFileSync(controllerScriptPath, psScript, 'utf8');
 
-        trayProcess = spawn('powershell.exe', [
+        controllerProcess = spawn('powershell.exe', [
             '-NoLogo',
-            '-NonInteractive',
+            '-STA',
             '-WindowStyle', 'Hidden',
             '-NoProfile',
             '-ExecutionPolicy', 'Bypass',
-            '-File', trayScriptPath,
-            '-ServerPid', String(process.pid),
-            '-Port', String(port),
-            '-LanUrl', lanUrl
+            '-File', controllerScriptPath
         ], { detached: true, stdio: 'ignore', windowsHide: true });
-        trayProcess.unref();
+        controllerProcess.unref();
 
     } catch (e) {
-        console.warn('System tray initialization notice:', e.message);
+        console.warn('Companion controller initialization notice:', e.message);
     }
 }
 
-function stopSystemTray() {
-    if (trayProcess) {
-        try { trayProcess.kill(); } catch (e) {}
+function stopCompanionController() {
+    if (controllerProcess) {
+        try { controllerProcess.kill(); } catch (e) {}
     }
+    try {
+        if (fs.existsSync(INSTANCE_LOCK_FILE)) fs.unlinkSync(INSTANCE_LOCK_FILE);
+    } catch (e) {}
 }
-process.on('exit', stopSystemTray);
-process.on('SIGINT', () => { stopSystemTray(); process.exit(0); });
-process.on('SIGTERM', () => { stopSystemTray(); process.exit(0); });
+process.on('exit', stopCompanionController);
+process.on('SIGINT', () => { stopCompanionController(); process.exit(0); });
+process.on('SIGTERM', () => { stopCompanionController(); process.exit(0); });
 
 // Server Lifecycle & Intelligent Conflict Resolution
 let serverInstance = null;
@@ -845,6 +1099,10 @@ function startServer(targetPort, attemptsLeft = 10) {
         if (PORT !== originalRequestedPort) {
             portFallbackOccurred = true;
         }
+
+        try {
+            fs.writeFileSync(INSTANCE_LOCK_FILE, JSON.stringify({ pid: process.pid, port: PORT }), 'utf8');
+        } catch (e) {}
 
         const realLanIp = getRealLanIp();
         const localUrl = `http://localhost:${PORT}`;
@@ -880,9 +1138,9 @@ function startServer(targetPort, attemptsLeft = 10) {
             } catch (e) {}
         }
 
-        // Initialize Windows System Tray Icon in background (non-blocking)
+        // Initialize Windows Companion Controller & System Tray in background
         setTimeout(() => {
-            startSystemTray(PORT, networkUrl);
+            startCompanionController(PORT, networkUrl);
         }, 80);
     });
 
@@ -893,7 +1151,7 @@ function startServer(targetPort, attemptsLeft = 10) {
             try {
                 const checkRes = await fetch(`http://127.0.0.1:${targetPort}/api/status`, {
                     headers: { 'X-Arth-Signature': AUTHOR_SIGNATURE },
-                    signal: AbortSignal.timeout(400)
+                    signal: AbortSignal.timeout(150)
                 });
                 const json = await checkRes.json().catch(() => ({}));
                 if (json.app === 'Local File Hub') {
