@@ -602,258 +602,62 @@ app.use((req, res) => {
     res.status(404).send('Local File Hub: UI files not found');
 });
 
-// GUI Mini-Controller & Status Notification System
-let guiStatePath = null;
-let guiProcess = null;
-let isGuiInitialized = false;
-
-function initGuiController(initialPort) {
-    if (isGuiInitialized) return;
-    isGuiInitialized = true;
-
-    const isBackground = process.argv.includes('--background') || process.argv.includes('-b') || process.argv.includes('--silent');
-    if (process.platform !== 'win32' || isBackground) return;
-
+// Native Port Process Inspector & Process Killer (Ultra-Lightweight, Zero-Overhead)
+function getProcessOnPort(port) {
+    if (process.platform !== 'win32') return null;
     try {
-        guiStatePath = path.join(os.tmpdir(), `kryin-state-${process.pid}.json`);
-        const scriptPath = path.join(os.tmpdir(), 'kryin-controller.ps1');
-
-        const psScript = `param (
-    [int]$ServerPid = 0,
-    [string]$StateFile = ""
-)
-
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
-
-$form = New-Object System.Windows.Forms.Form
-$form.Text = "Kryin Local File Hub"
-$form.Size = New-Object System.Drawing.Size(460, 270)
-$form.StartPosition = "CenterScreen"
-$form.FormBorderStyle = "FixedDialog"
-$form.MaximizeBox = $false
-$form.BackColor = [System.Drawing.ColorTranslator]::FromHtml("#0f172a")
-$form.ForeColor = [System.Drawing.ColorTranslator]::FromHtml("#f8fafc")
-$form.ShowInTaskbar = $true
-
-# Header Bar
-$header = New-Object System.Windows.Forms.Panel
-$header.Location = New-Object System.Drawing.Point(0, 0)
-$header.Size = New-Object System.Drawing.Size(460, 48)
-$header.BackColor = [System.Drawing.ColorTranslator]::FromHtml("#1e293b")
-$form.Controls.Add($header)
-
-$accentLine = New-Object System.Windows.Forms.Panel
-$accentLine.Location = New-Object System.Drawing.Point(0, 0)
-$accentLine.Size = New-Object System.Drawing.Size(460, 3)
-$accentLine.BackColor = [System.Drawing.ColorTranslator]::FromHtml("#38bdf8")
-$header.Controls.Add($accentLine)
-
-$lblTitle = New-Object System.Windows.Forms.Label
-$lblTitle.Text = "Kryin Local File Hub"
-$lblTitle.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
-$lblTitle.ForeColor = [System.Drawing.ColorTranslator]::FromHtml("#38bdf8")
-$lblTitle.Location = New-Object System.Drawing.Point(16, 12)
-$lblTitle.Size = New-Object System.Drawing.Size(240, 26)
-$header.Controls.Add($lblTitle)
-
-$lblAuthor = New-Object System.Windows.Forms.Label
-$lblAuthor.Text = "Created by Arth"
-$lblAuthor.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
-$lblAuthor.ForeColor = [System.Drawing.ColorTranslator]::FromHtml("#94a3b8")
-$lblAuthor.Location = New-Object System.Drawing.Point(340, 15)
-$lblAuthor.Size = New-Object System.Drawing.Size(100, 20)
-$lblAuthor.TextAlign = [System.Drawing.ContentAlignment]::TopRight
-$header.Controls.Add($lblAuthor)
-
-# Status Card
-$card = New-Object System.Windows.Forms.Panel
-$card.Location = New-Object System.Drawing.Point(16, 60)
-$card.Size = New-Object System.Drawing.Size(412, 105)
-$card.BackColor = [System.Drawing.ColorTranslator]::FromHtml("#1e293b")
-$form.Controls.Add($card)
-
-$lblStatusHeader = New-Object System.Windows.Forms.Label
-$lblStatusHeader.Text = "STATUS: Initializing Server..."
-$lblStatusHeader.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
-$lblStatusHeader.ForeColor = [System.Drawing.ColorTranslator]::FromHtml("#facc15")
-$lblStatusHeader.Location = New-Object System.Drawing.Point(12, 10)
-$lblStatusHeader.Size = New-Object System.Drawing.Size(388, 22)
-$card.Controls.Add($lblStatusHeader)
-
-$lblStatusLine1 = New-Object System.Windows.Forms.Label
-$lblStatusLine1.Text = "Checking port availability..."
-$lblStatusLine1.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-$lblStatusLine1.ForeColor = [System.Drawing.ColorTranslator]::FromHtml("#e2e8f0")
-$lblStatusLine1.Location = New-Object System.Drawing.Point(12, 36)
-$lblStatusLine1.Size = New-Object System.Drawing.Size(388, 20)
-$card.Controls.Add($lblStatusLine1)
-
-$lblStatusLine2 = New-Object System.Windows.Forms.Label
-$lblStatusLine2.Text = "Please wait a moment..."
-$lblStatusLine2.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
-$lblStatusLine2.ForeColor = [System.Drawing.ColorTranslator]::FromHtml("#94a3b8")
-$lblStatusLine2.Location = New-Object System.Drawing.Point(12, 58)
-$lblStatusLine2.Size = New-Object System.Drawing.Size(388, 38)
-$card.Controls.Add($lblStatusLine2)
-
-# Action Buttons
-$btnBrowser = New-Object System.Windows.Forms.Button
-$btnBrowser.Text = "Open Browser"
-$btnBrowser.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$btnBrowser.BackColor = [System.Drawing.ColorTranslator]::FromHtml("#0284c7")
-$btnBrowser.ForeColor = [System.Drawing.Color]::White
-$btnBrowser.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-$btnBrowser.FlatAppearance.BorderSize = 0
-$btnBrowser.Location = New-Object System.Drawing.Point(16, 178)
-$btnBrowser.Size = New-Object System.Drawing.Size(125, 36)
-$btnBrowser.Enabled = $false
-$btnBrowser.Cursor = [System.Windows.Forms.Cursors]::Hand
-$form.Controls.Add($btnBrowser)
-
-$btnMinimize = New-Object System.Windows.Forms.Button
-$btnMinimize.Text = "Minimize"
-$btnMinimize.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-$btnMinimize.BackColor = [System.Drawing.ColorTranslator]::FromHtml("#334155")
-$btnMinimize.ForeColor = [System.Drawing.ColorTranslator]::FromHtml("#e2e8f0")
-$btnMinimize.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-$btnMinimize.FlatAppearance.BorderSize = 0
-$btnMinimize.Location = New-Object System.Drawing.Point(152, 178)
-$btnMinimize.Size = New-Object System.Drawing.Size(110, 36)
-$btnMinimize.Cursor = [System.Windows.Forms.Cursors]::Hand
-$btnMinimize.Add_Click({
-    $form.WindowState = [System.Windows.Forms.FormWindowState]::Minimized
-})
-$form.Controls.Add($btnMinimize)
-
-$btnStop = New-Object System.Windows.Forms.Button
-$btnStop.Text = "Stop Server"
-$btnStop.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$btnStop.BackColor = [System.Drawing.ColorTranslator]::FromHtml("#dc2626")
-$btnStop.ForeColor = [System.Drawing.Color]::White
-$btnStop.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-$btnStop.FlatAppearance.BorderSize = 0
-$btnStop.Location = New-Object System.Drawing.Point(298, 178)
-$btnStop.Size = New-Object System.Drawing.Size(130, 36)
-$btnStop.Cursor = [System.Windows.Forms.Cursors]::Hand
-$btnStop.Add_Click({
-    $form.Close()
-})
-$form.Controls.Add($btnStop)
-
-# Dynamic State Monitoring
-$script:activePort = ${initialPort}
-$script:minimizedDone = $false
-
-$timer = New-Object System.Windows.Forms.Timer
-$timer.Interval = 250
-$timer.Add_Tick({
-    if ($ServerPid -gt 0) {
-        $p = Get-Process -Id $ServerPid -ErrorAction SilentlyContinue
-        if (-not $p) {
-            $form.Close()
-            return
-        }
-    }
-
-    if ($StateFile -and (Test-Path $StateFile)) {
-        try {
-            $raw = Get-Content $StateFile -Raw -ErrorAction SilentlyContinue
-            if ($raw) {
-                $st = $raw | ConvertFrom-Json
-                if ($st) {
-                    if ($st.status -eq "running") {
-                        $script:activePort = $st.port
-                        $lblStatusHeader.Text = "ACTIVE: Server Running"
-                        $lblStatusHeader.ForeColor = [System.Drawing.ColorTranslator]::FromHtml("#4ade80")
-                        $lblStatusLine1.Text = "Local Access: http://localhost:" + $st.port
-                        $lblStatusLine2.Text = "LAN Network: " + $st.lanUrl + " (Share with devices)"
-                        $btnBrowser.Enabled = $true
-                        
-                        if ($st.autoMinimize -and (-not $script:minimizedDone)) {
-                            $script:minimizedDone = $true
-                            Start-Sleep -Milliseconds 1500
-                            $form.WindowState = [System.Windows.Forms.FormWindowState]::Minimized
-                        }
-                    } elseif ($st.status -eq "switching") {
-                        $lblStatusHeader.Text = "SWITCHING: Port " + $st.occupiedPort + " In Use"
-                        $lblStatusHeader.ForeColor = [System.Drawing.ColorTranslator]::FromHtml("#fb923c")
-                        $lblStatusLine1.Text = "Trying fallback port " + $st.targetPort + "..."
-                        $lblStatusLine2.Text = "Resolving port collision automatically."
-                    } elseif ($st.status -eq "error") {
-                        $lblStatusHeader.Text = "ERROR: Port Conflict"
-                        $lblStatusHeader.ForeColor = [System.Drawing.ColorTranslator]::FromHtml("#ef4444")
-                        $lblStatusLine1.Text = "Could not bind ports 20260 - 20270."
-                        $lblStatusLine2.Text = "Please close conflicting apps or edit config.json."
-                        $btnBrowser.Text = "Edit Config"
-                        $btnBrowser.Enabled = $true
-                    }
+        const netstat = execSync('netstat -ano -p tcp', { encoding: 'utf8' });
+        const lines = netstat.split('\n');
+        for (const line of lines) {
+            if (line.includes(':' + port) && line.includes('LISTENING')) {
+                const parts = line.trim().split(/\s+/);
+                const pid = parts[parts.length - 1];
+                if (pid && !isNaN(pid) && parseInt(pid) > 0) {
+                    let procName = 'Unknown Application';
+                    try {
+                        const task = execSync(`tasklist /fi "PID eq ${pid}" /fo csv /nh`, { encoding: 'utf8' });
+                        const match = task.match(/"([^"]+)"/);
+                        if (match) procName = match[1];
+                    } catch (e) {}
+                    return { pid: parseInt(pid), name: procName };
                 }
             }
-        } catch {}
-    }
-})
-
-$btnBrowser.Add_Click({
-    if ($lblStatusHeader.Text -like "*ERROR*") {
-        Start-Process "notepad.exe" -ArgumentList "config.json"
-    } else {
-        Start-Process ("http://localhost:" + $script:activePort)
-    }
-})
-
-# Form Closing Handler - cleanly terminates server
-$form.Add_FormClosing({
-    $timer.Stop()
-    if ($ServerPid -gt 0) {
-        Stop-Process -Id $ServerPid -Force -ErrorAction SilentlyContinue
-    }
-    if ($StateFile -and (Test-Path $StateFile)) {
-        Remove-Item $StateFile -Force -ErrorAction SilentlyContinue
-    }
-})
-
-$timer.Start()
-$form.ShowDialog() | Out-Null
-`;
-        fs.writeFileSync(scriptPath, psScript, 'utf8');
-
-        // Write initial state
-        updateGuiState({ status: 'starting', targetPort: initialPort });
-
-        // Spawn GUI controller detached
-        guiProcess = spawn('powershell.exe', [
-            '-WindowStyle', 'Hidden',
-            '-NoProfile',
-            '-ExecutionPolicy', 'Bypass',
-            '-File', scriptPath,
-            '-ServerPid', String(process.pid),
-            '-StateFile', guiStatePath
-        ], { detached: true, stdio: 'ignore' });
-        guiProcess.unref();
-
-    } catch (e) {
-        console.warn('Could not launch GUI mini-controller:', e.message);
-    }
-}
-
-function updateGuiState(state) {
-    if (!guiStatePath) return;
-    try {
-        fs.writeFileSync(guiStatePath, JSON.stringify(state), 'utf8');
+        }
     } catch (e) {}
+    return null;
 }
 
-function cleanupGui() {
-    if (guiStatePath && fs.existsSync(guiStatePath)) {
-        try { fs.unlinkSync(guiStatePath); } catch (e) {}
+function promptKillProcess(port, proc) {
+    if (process.platform !== 'win32') return false;
+    try {
+        const title = 'Kryin Local File Hub - Port In Use';
+        const msg = `Port ${port} is currently in use by another application:`
+            + `\`n\`n  • Application:  ${proc.name}`
+            + `\`n  • Process ID:   ${proc.pid}`
+            + `\`n  • Command:      taskkill /F /PID ${proc.pid}`
+            + `\`n\`nWould you like to terminate this process and free port ${port}?`
+            + `\`n\`n• Click [YES] to terminate ${proc.name} (taskkill) and start on port ${port}.`
+            + `\`n• Click [NO] to keep it running and automatically switch to the next available port.`;
+
+        const escapedMsg = msg.replace(/'/g, "''");
+        const escapedTitle = title.replace(/'/g, "''");
+        const cmd = `powershell.exe -WindowStyle Hidden -NoProfile -Command "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('${escapedMsg}', '${escapedTitle}', 'YesNo', 'Question')"`;
+        const result = execSync(cmd, { encoding: 'utf8' }).trim();
+        return result === 'Yes';
+    } catch (e) {
+        return false;
     }
 }
-process.on('exit', cleanupGui);
-process.on('SIGINT', () => { cleanupGui(); process.exit(0); });
-process.on('SIGTERM', () => { cleanupGui(); process.exit(0); });
 
-// Native Windows Synchronous Alert Dialog
+function killProcess(pid) {
+    try {
+        execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' });
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
 function showNativeAlert(title, message) {
     if (process.platform === 'win32') {
         try {
@@ -865,15 +669,31 @@ function showNativeAlert(title, message) {
     }
 }
 
-// Server Lifecycle & Multi-Tier Port Conflict Resolution
+// API: Shutdown Server Gracefully (from Admin Settings)
+const handleShutdown = (req, res) => {
+    if (!isHostRequest(req)) {
+        return res.status(403).json({ error: 'Permission Denied: Only host computer can shutdown the server.' });
+    }
+    const { password } = req.body || {};
+    if (password !== HOST_ACTION_PASSWORD) {
+        return res.status(401).json({ error: 'Access Denied: Wrong attempt.' });
+    }
+
+    res.json({ success: true, message: 'Server is shutting down.' });
+    setTimeout(() => {
+        process.exit(0);
+    }, 400);
+};
+
+app.post('/api/admin/shutdown', handleShutdown);
+app.post('/api/system/shutdown', handleShutdown);
+
+// Server Lifecycle & Intelligent Conflict Resolution
 let serverInstance = null;
 let originalRequestedPort = PORT;
 let portFallbackOccurred = false;
 
 function startServer(targetPort, attemptsLeft = 10) {
-    // Launch Mini-Controller on initial start
-    initGuiController(targetPort);
-
     const server = app.listen(targetPort, '0.0.0.0');
 
     server.on('listening', () => {
@@ -885,14 +705,6 @@ function startServer(targetPort, attemptsLeft = 10) {
         const realLanIp = getRealLanIp();
         const localUrl = `http://localhost:${PORT}`;
         const networkUrl = `http://${realLanIp}:${PORT}`;
-
-        // Update Mini-Controller GUI status
-        updateGuiState({
-            status: 'running',
-            port: PORT,
-            lanUrl: networkUrl,
-            autoMinimize: true
-        });
 
         console.log('\n======================================================');
         console.log('  LOCAL FILE HUB - CREATED BY ARTH PUROHIT');
@@ -932,7 +744,7 @@ function startServer(targetPort, attemptsLeft = 10) {
             try {
                 const checkRes = await fetch(`http://127.0.0.1:${targetPort}/api/status`, {
                     headers: { 'X-Arth-Signature': AUTHOR_SIGNATURE },
-                    signal: AbortSignal.timeout(600)
+                    signal: AbortSignal.timeout(500)
                 });
                 const json = await checkRes.json().catch(() => ({}));
                 if (json.app === 'Local File Hub') {
@@ -943,8 +755,7 @@ function startServer(targetPort, attemptsLeft = 10) {
             }
 
             if (isOurAppRunning) {
-                // Single-Instance: Open browser to existing server and exit
-                cleanupGui();
+                // Single-Instance: Bring up existing server's browser tab and exit cleanly
                 const localUrl = `http://localhost:${targetPort}`;
                 const isBackground = process.argv.includes('--background') || process.argv.includes('-b') || process.argv.includes('--silent');
                 if (!isBackground && config.autoOpenBrowser !== false) {
@@ -962,37 +773,44 @@ function startServer(targetPort, attemptsLeft = 10) {
                 return;
             }
 
-            // Tier 2: Port occupied by another application. Try next available port
+            // Tier 2: Another application is using this port - inspect process and offer to kill
+            const conflictingProc = getProcessOnPort(targetPort);
+            const isBackground = process.argv.includes('--background') || process.argv.includes('-b') || process.argv.includes('--silent');
+
+            if (conflictingProc && !isBackground) {
+                const shouldKill = promptKillProcess(targetPort, conflictingProc);
+                if (shouldKill) {
+                    const killed = killProcess(conflictingProc.pid);
+                    if (killed) {
+                        // Wait 300ms for OS socket release, then retry targetPort
+                        setTimeout(() => {
+                            startServer(targetPort, attemptsLeft);
+                        }, 300);
+                        return;
+                    }
+                }
+            }
+
+            // Tier 3: Try next available fallback port
             if (attemptsLeft > 0 && targetPort < 65535) {
                 const nextPort = targetPort + 1;
-                console.warn(`Notice: Port ${targetPort} is occupied by another program. Trying port ${nextPort}...`);
-                updateGuiState({
-                    status: 'switching',
-                    occupiedPort: targetPort,
-                    targetPort: nextPort
-                });
+                console.warn(`Notice: Port ${targetPort} is occupied. Trying next port ${nextPort}...`);
                 return startServer(nextPort, attemptsLeft - 1);
             }
 
-            // Tier 3: All fallback ports exhausted. Show GUI update and synchronous alert
-            updateGuiState({
-                status: 'error',
-                message: `Could not start server on port ${originalRequestedPort} (ports ${originalRequestedPort}-${targetPort} are occupied).`
-            });
+            // Tier 4: All fallback ports exhausted. Show clear warning alert
             showNativeAlert(
                 'Kryin Local File Hub - Port Conflict',
-                `Could not start server on port ${originalRequestedPort} (or subsequent fallback ports).\n\nThe port is currently in use by another application.\n\nPlease close the conflicting program or choose a different port in config.json.`
+                `Could not start server on port ${originalRequestedPort} (or fallback ports up to ${targetPort}).\n\nAll attempted ports are currently in use by other applications.\n\nPlease close conflicting programs or select an available port in config.json.`
             );
-            cleanupGui();
             process.exit(1);
         } else {
             console.error('Server initialization error:', err);
-            cleanupGui();
             process.exit(1);
         }
     });
 
-    // Upload connection stability
+    // Connection stability
     server.requestTimeout = 0;
     server.headersTimeout = 0;
     server.timeout = 0;
