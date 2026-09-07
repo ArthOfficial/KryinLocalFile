@@ -707,6 +707,136 @@ const handleShutdown = (req, res) => {
 app.post('/api/admin/shutdown', handleShutdown);
 app.post('/api/system/shutdown', handleShutdown);
 
+// Windows System Tray Integration (Tray Icon in Taskbar Notification Area with Right-Click Menu)
+let trayProcess = null;
+
+function startSystemTray(port, lanUrl) {
+    if (process.platform !== 'win32') return;
+    if (trayProcess) {
+        try { trayProcess.kill(); } catch (e) {}
+    }
+
+    try {
+        const trayScriptPath = path.join(os.tmpdir(), 'kryin-tray.ps1');
+        const exePath = (process.execPath || '').replace(/'/g, "''");
+
+        const psTrayScript = `param (
+    [int]$ServerPid = 0,
+    [int]$Port = ${port},
+    [string]$LanUrl = "${lanUrl}",
+    [string]$ExePath = "${exePath}"
+)
+
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+$notify = New-Object System.Windows.Forms.NotifyIcon
+
+try {
+    if ($ExePath -and (Test-Path $ExePath)) {
+        $notify.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($ExePath)
+    } else {
+        $notify.Icon = [System.Drawing.SystemIcons]::Application
+    }
+} catch {
+    $notify.Icon = [System.Drawing.SystemIcons]::Application
+}
+
+$notify.Text = "Kryin Local File Hub - Port $Port"
+$notify.Visible = $true
+
+# Context Menu (Right-Click like Docker / OneDrive)
+$menu = New-Object System.Windows.Forms.ContextMenuStrip
+
+$header = $menu.Items.Add("Kryin Local File Hub (v2026)")
+$header.Enabled = $false
+
+$sep0 = $menu.Items.Add("-")
+
+$menuOpen = $menu.Items.Add("Open in Browser")
+$menuOpen.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$menuOpen.Add_Click({
+    Start-Process "http://localhost:$Port"
+})
+
+$menuLan = $menu.Items.Add("Copy LAN Link ($LanUrl)")
+$menuLan.Add_Click({
+    [System.Windows.Forms.Clipboard]::SetText($LanUrl)
+    $notify.ShowBalloonTip(2000, "Kryin Local File Hub", "LAN URL copied to clipboard!\`n$LanUrl", [System.Windows.Forms.ToolTipIcon]::Info)
+})
+
+$menuConfig = $menu.Items.Add("Settings / Change Port (config.json)")
+$menuConfig.Add_Click({
+    Start-Process "notepad.exe" -ArgumentList "config.json"
+})
+
+$sep1 = $menu.Items.Add("-")
+
+$menuStop = $menu.Items.Add("Stop Server")
+$menuStop.ForeColor = [System.Drawing.Color]::Red
+$menuStop.Add_Click({
+    $notify.Visible = $false
+    if ($ServerPid -gt 0) {
+        Stop-Process -Id $ServerPid -Force -ErrorAction SilentlyContinue
+    }
+    [System.Windows.Forms.Application]::Exit()
+})
+
+$notify.ContextMenuStrip = $menu
+
+# Left double-click opens browser
+$notify.Add_DoubleClick({
+    Start-Process "http://localhost:$Port"
+})
+
+# Balloon notification near taskbar tray arrow
+$notify.ShowBalloonTip(3000, "Kryin Local File Hub", "Server active on port $Port.\`nRight-click this tray icon to manage or stop.", [System.Windows.Forms.ToolTipIcon]::Info)
+
+# Watch parent server process
+$timer = New-Object System.Windows.Forms.Timer
+$timer.Interval = 1000
+$timer.Add_Tick({
+    if ($ServerPid -gt 0) {
+        $p = Get-Process -Id $ServerPid -ErrorAction SilentlyContinue
+        if (-not $p) {
+            $notify.Visible = $false
+            [System.Windows.Forms.Application]::Exit()
+        }
+    }
+})
+$timer.Start()
+
+[System.Windows.Forms.Application]::Run()
+`;
+
+        fs.writeFileSync(trayScriptPath, psTrayScript, 'utf8');
+
+        trayProcess = spawn('powershell.exe', [
+            '-WindowStyle', 'Hidden',
+            '-NoProfile',
+            '-ExecutionPolicy', 'Bypass',
+            '-File', trayScriptPath,
+            '-ServerPid', String(process.pid),
+            '-Port', String(port),
+            '-LanUrl', lanUrl,
+            '-ExePath', process.execPath
+        ], { detached: true, stdio: 'ignore' });
+        trayProcess.unref();
+
+    } catch (e) {
+        console.warn('System tray initialization notice:', e.message);
+    }
+}
+
+function stopSystemTray() {
+    if (trayProcess) {
+        try { trayProcess.kill(); } catch (e) {}
+    }
+}
+process.on('exit', stopSystemTray);
+process.on('SIGINT', () => { stopSystemTray(); process.exit(0); });
+process.on('SIGTERM', () => { stopSystemTray(); process.exit(0); });
+
 // Server Lifecycle & Intelligent Conflict Resolution
 let serverInstance = null;
 let originalRequestedPort = PORT;
@@ -724,6 +854,9 @@ function startServer(targetPort, attemptsLeft = 10) {
         const realLanIp = getRealLanIp();
         const localUrl = `http://localhost:${PORT}`;
         const networkUrl = `http://${realLanIp}:${PORT}`;
+
+        // Initialize Windows System Tray Icon (under the taskbar arrow)
+        startSystemTray(PORT, networkUrl);
 
         console.log('\n======================================================');
         console.log('  LOCAL FILE HUB - CREATED BY ARTH PUROHIT');
