@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# AI instructions
+ai-instructions.md
+
+# Storage temp and runtime caches
+cloud/.tmp/
+cloud/*
+!cloud/.gitkeep
+
+# Build artifacts
+dist/
+FileManagerLocal.exe
+
+# OS / Environment files
+.DS_Store
+Thumbs.db
