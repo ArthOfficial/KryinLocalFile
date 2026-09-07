@@ -14,7 +14,7 @@ Packaged as a standalone portable Windows executable (`KryinLocalFile.exe`) with
 ## ✨ Features
 
 - 🖥️ **Zero-Console Execution**: Compiled with the Windows GUI PE subsystem. Double-clicking the `.exe` opens your sleek browser dashboard directly without any flashing black terminal windows.
-- ⚙️ **Host Admin Control Panel**: Dedicated, password-protected (default: `2026`) modal panel accessible only to the host computer. Configure autostart, inspect live network IPs, and control background server processes.
+- ⚙️ **Host Admin Control Panel**: Dedicated, password-protected control modal accessible only to the host computer. Customize the server HTTP port, update host administrator passwords, configure Windows autostart, inspect live network IPs, and control background server processes.
 - 🔄 **Windows Autostart (Background Service)**: Toggle "Start with Windows" directly from the Admin Panel. Runs silently in the background on startup (`--background`) ready for LAN requests.
 - ⚡ **High-Speed Chunked Streaming**: Automatically slices large files into 50MB chunks with automatic retry logic and server-side reassembly, easily handling 10GB+ files without memory leaks.
 - 📱 **Cross-Platform LAN Sharing**: Connect any phone, tablet, or computer on the same Wi-Fi using the displayed real Wi-Fi IP address.
