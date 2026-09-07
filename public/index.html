@@ -221,6 +221,35 @@
                         </label>
                     </div>
 
+                    <!-- Setting: Server HTTP Port -->
+                    <div class="admin-setting-card port-setting-card">
+                        <div class="setting-info">
+                            <span class="setting-title">Server HTTP Port</span>
+                            <span class="setting-desc">Port used for network sharing and web dashboard.</span>
+                        </div>
+                        <div class="port-display-group" id="port-view-mode">
+                            <span class="port-locked-badge" title="Current Active Port">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                </svg>
+                                <span id="current-port-text">3000</span>
+                            </span>
+                            <button type="button" class="btn-secondary btn-sm" id="unlock-port-btn">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 20h9"></path>
+                                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                                </svg>
+                                <span>Change Port</span>
+                            </button>
+                        </div>
+                        <div class="port-edit-group" id="port-edit-mode" style="display: none;">
+                            <input type="number" id="edit-port-input" class="field-input port-input" min="80" max="65535" placeholder="3000">
+                            <button type="button" class="btn-primary btn-sm" id="save-port-btn">Save</button>
+                            <button type="button" class="btn-secondary btn-sm" id="cancel-port-btn">Cancel</button>
+                        </div>
+                    </div>
+
                     <!-- Info: Real LAN Network -->
                     <div class="admin-info-card">
                         <div class="info-row">
@@ -241,25 +270,21 @@
                         </div>
                     </div>
 
-                    <!-- Setting: Server & Admin Configuration -->
-                    <div class="admin-config-card">
-                        <div class="config-card-header">
-                            <span class="setting-title">Server & Admin Configuration</span>
-                            <span class="setting-desc">Configure server port and host administrator password.</span>
+                    <!-- Setting: Admin Security Credentials -->
+                    <div class="admin-setting-card security-setting-card">
+                        <div class="setting-info">
+                            <span class="setting-title">Admin Access Credentials</span>
+                            <span class="setting-desc">Host administrator password used to unlock control panel.</span>
                         </div>
-                        <div class="config-fields-grid">
-                            <div class="config-field">
-                                <label for="config-port-input" class="config-label">Server Port</label>
-                                <input type="number" id="config-port-input" class="field-input config-input" min="80" max="65535" placeholder="3000">
-                            </div>
-                            <div class="config-field">
-                                <label for="config-password-input" class="config-label">New Admin Password</label>
-                                <input type="password" id="config-password-input" class="field-input config-input" placeholder="Enter new password (optional)" autocomplete="off">
-                            </div>
-                        </div>
-                        <div class="config-footer">
-                            <span class="config-note">Port change is saved to config.json and takes effect on restart.</span>
-                            <button type="button" class="btn-primary" id="admin-save-config-btn">Save Configuration</button>
+                        <div class="password-action-wrap">
+                            <span class="password-masked-badge">••••••••</span>
+                            <button type="button" class="btn-secondary btn-sm" id="open-change-password-modal-btn">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                </svg>
+                                <span>Change Password</span>
+                            </button>
                         </div>
                     </div>
 
@@ -282,6 +307,46 @@
                 <div class="modal-actions">
                     <button type="button" class="btn-secondary" id="admin-dashboard-close-btn">Close</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change Password Modal Popup -->
+    <div class="modal-backdrop" id="change-password-modal">
+        <div class="modal-dialog change-password-dialog">
+            <div class="modal-header">
+                <div class="modal-icon-wrap">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="modal-title">Change Admin Password</h3>
+                    <p class="modal-description">Update host administrator credentials.</p>
+                </div>
+            </div>
+
+            <div class="modal-body">
+                <div class="password-field-group">
+                    <label for="cp-old-password" class="field-label">Current Password</label>
+                    <input type="password" id="cp-old-password" class="field-input" placeholder="Enter current password..." autocomplete="off">
+                </div>
+
+                <div class="password-field-group">
+                    <label for="cp-new-password" class="field-label">New Password</label>
+                    <input type="password" id="cp-new-password" class="field-input" placeholder="Enter new password (min 3 chars)..." autocomplete="off">
+                </div>
+
+                <div class="password-field-group">
+                    <label for="cp-confirm-password" class="field-label">Confirm New Password</label>
+                    <input type="password" id="cp-confirm-password" class="field-input" placeholder="Re-enter new password..." autocomplete="off">
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" id="cp-cancel-btn">Cancel</button>
+                <button type="button" class="btn-primary" id="cp-submit-btn">Update Password</button>
             </div>
         </div>
     </div>
