@@ -63,6 +63,9 @@
     const adminLanIp = document.getElementById('admin-lan-ip');
     const adminLanUrl = document.getElementById('admin-lan-url');
     const adminServerPort = document.getElementById('admin-server-port');
+    const configPortInput = document.getElementById('config-port-input');
+    const configPasswordInput = document.getElementById('config-password-input');
+    const adminSaveConfigBtn = document.getElementById('admin-save-config-btn');
 
     // Progress Elements
     const progressContainer = document.getElementById('progress-container');
@@ -113,6 +116,7 @@
                 if (adminLanIp) adminLanIp.textContent = data.serverIp || '127.0.0.1';
                 if (adminLanUrl) adminLanUrl.textContent = currentLanUrl;
                 if (adminServerPort) adminServerPort.textContent = data.port || 3000;
+                if (configPortInput) configPortInput.value = data.port || 3000;
             } else {
                 dot.className = 'status-dot client';
                 connectionLabel.textContent = 'Connected via LAN';
@@ -594,12 +598,12 @@
             });
         }
 
-        // Host Admin Auth Submit (Verifies 2026 with Server)
+        // Host Admin Auth Submit
         if (adminAuthSubmitBtn && adminPanelPassInput) {
             async function submitAdminPassword() {
                 const enteredPass = adminPanelPassInput.value.trim();
                 if (!enteredPass) {
-                    showToast('Please enter password (default: 2026)', 'warning');
+                    showToast('Please enter the admin password', 'warning');
                     adminPanelPassInput.focus();
                     return;
                 }
@@ -624,7 +628,8 @@
                         await updateAutostartToggleState();
                         showToast('Host Admin Panel Unlocked', 'success');
                     } else {
-                        showToast(data.error || 'Incorrect password.', 'error', 'Authentication Failed');
+                        showToast(data.error || 'Wrong attempt. Access denied.', 'error', 'Security Alert');
+                        adminPanelPassInput.value = '';
                         adminPanelPassInput.focus();
                     }
                 } catch (e) {
@@ -675,11 +680,87 @@
                         showToast(desired ? 'Start with Windows enabled (runs silently in background on boot)' : 'Start with Windows disabled', 'success');
                     } else {
                         adminAutostartToggle.checked = !desired;
-                        showToast(result.error || 'Failed to update autostart setting', 'error');
+                        showToast(result.error || 'Wrong attempt. Failed to update autostart setting.', 'error', 'Security Alert');
                     }
                 } catch (e) {
                     adminAutostartToggle.checked = !desired;
                     showToast('Error updating autostart setting', 'error');
+                }
+            });
+        }
+
+        // Admin Configuration Save (Port & Password)
+        if (adminSaveConfigBtn) {
+            adminSaveConfigBtn.addEventListener('click', async () => {
+                const newPortVal = configPortInput ? configPortInput.value.trim() : '';
+                const newPassVal = configPasswordInput ? configPasswordInput.value.trim() : '';
+
+                if (!newPortVal && !newPassVal) {
+                    showToast('No configuration changes entered.', 'warning');
+                    return;
+                }
+
+                let parsedPort = undefined;
+                if (newPortVal) {
+                    parsedPort = parseInt(newPortVal, 10);
+                    if (isNaN(parsedPort) || parsedPort < 80 || parsedPort > 65535) {
+                        showToast('Port must be a valid number between 80 and 65535.', 'error', 'Invalid Port');
+                        if (configPortInput) configPortInput.focus();
+                        return;
+                    }
+                }
+
+                if (newPassVal && newPassVal.length < 3) {
+                    showToast('New admin password must be at least 3 characters.', 'error', 'Invalid Password');
+                    if (configPasswordInput) configPasswordInput.focus();
+                    return;
+                }
+
+                adminSaveConfigBtn.disabled = true;
+                adminSaveConfigBtn.textContent = 'Saving...';
+
+                try {
+                    const res = await fetch('/api/admin/update-settings', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Arth-Signature': INTEGRITY_TOKEN
+                        },
+                        body: JSON.stringify({
+                            currentPassword: verifiedAdminPassword,
+                            newAdminPassword: newPassVal || undefined,
+                            newPort: parsedPort
+                        })
+                    });
+
+                    const result = await res.json();
+                    if (res.ok && result.success) {
+                        if (newPassVal) {
+                            verifiedAdminPassword = newPassVal;
+                            if (configPasswordInput) configPasswordInput.value = '';
+                        }
+                        if (parsedPort) {
+                            if (adminServerPort) adminServerPort.textContent = parsedPort;
+                            const ip = adminLanIp ? adminLanIp.textContent : '127.0.0.1';
+                            currentLanUrl = `http://${ip}:${parsedPort}`;
+                            if (adminLanUrl) adminLanUrl.textContent = currentLanUrl;
+                            if (lanUrlDisplay) lanUrlDisplay.textContent = currentLanUrl;
+                        }
+                        showToast(
+                            parsedPort
+                                ? `Configuration saved! Server port set to ${parsedPort} (restart server to apply port change).`
+                                : 'Host admin password updated successfully and saved to config.json.',
+                            'success',
+                            'Configuration Saved'
+                        );
+                    } else {
+                        showToast(result.error || 'Wrong attempt. Failed to save configuration.', 'error', 'Security Alert');
+                    }
+                } catch (err) {
+                    showToast('Network error while saving configuration', 'error');
+                } finally {
+                    adminSaveConfigBtn.disabled = false;
+                    adminSaveConfigBtn.textContent = 'Save Configuration';
                 }
             });
         }
