@@ -59,6 +59,12 @@ let PORT = process.env.PORT || config.port || 20260;
 let ADMIN_PASSWORD = config.adminPassword || 'kryinadmin';
 let HOST_ACTION_PASSWORD = config.hostActionPassword || '2026';
 
+function isValidHostPassword(pass) {
+    if (!pass) return false;
+    const clean = String(pass).trim();
+    return clean === HOST_ACTION_PASSWORD || clean === ADMIN_PASSWORD;
+}
+
 // App Tokens & Author Info
 const AUTHOR_SIGNATURE = 'ARTH_PUROHIT_VERIFIED_AUTH';
 const AUTHOR_INFO = {
@@ -217,7 +223,7 @@ function checkAutostart(callback) {
     if (process.platform !== 'win32') {
         return callback(null, false);
     }
-    exec(`reg query "${REG_KEY}" /v "${REG_VAL}"`, (err, stdout) => {
+    exec(`reg query "${REG_KEY}" /v "${REG_VAL}"`, { windowsHide: true }, (err, stdout) => {
         if (err || !stdout) {
             return callback(null, false);
         }
@@ -232,13 +238,13 @@ function setAutostart(enable, callback) {
     if (enable) {
         const exePath = getExePath();
         const cmd = `reg add "${REG_KEY}" /v "${REG_VAL}" /t REG_SZ /d "\\"${exePath}\\" --background" /f`;
-        exec(cmd, (err) => {
+        exec(cmd, { windowsHide: true }, (err) => {
             if (err) return callback(err);
             callback(null, true);
         });
     } else {
         const cmd = `reg delete "${REG_KEY}" /v "${REG_VAL}" /f`;
-        exec(cmd, () => {
+        exec(cmd, { windowsHide: true }, () => {
             callback(null, false);
         });
     }
@@ -300,7 +306,7 @@ app.post('/api/autostart', (req, res) => {
         return res.status(403).json({ error: 'Permission Denied: Only the host computer can configure autostart.' });
     }
     const { enabled, password } = req.body || {};
-    if (password !== HOST_ACTION_PASSWORD) {
+    if (!isValidHostPassword(password)) {
         return res.status(401).json({ error: 'Access Denied: Wrong attempt. Unauthorized attempt recorded.' });
     }
     setAutostart(!!enabled, (err, newState) => {
@@ -317,7 +323,7 @@ app.post('/api/system/shutdown', (req, res) => {
         return res.status(403).json({ error: 'Permission Denied: Only the host computer can stop the server.' });
     }
     const { password } = req.body || {};
-    if (password !== HOST_ACTION_PASSWORD) {
+    if (!isValidHostPassword(password)) {
         return res.status(401).json({ error: 'Access Denied: Wrong attempt. Unauthorized attempt recorded.' });
     }
     res.json({ success: true, message: 'Local File Hub is shutting down...' });
@@ -332,7 +338,7 @@ app.post('/api/admin/verify', (req, res) => {
         return res.status(403).json({ success: false, error: 'Permission Denied: Only host computer can access admin settings.' });
     }
     const { password } = req.body || {};
-    if (password === HOST_ACTION_PASSWORD) {
+    if (isValidHostPassword(password)) {
         return res.json({ success: true });
     }
     return res.status(401).json({ success: false, error: 'Access Denied: Wrong attempt. Unauthorized attempt recorded.' });
@@ -345,7 +351,7 @@ app.post('/api/admin/update-settings', (req, res) => {
     }
     const { currentPassword, newAdminPassword, newPort, newRemotePassword } = req.body || {};
 
-    if (currentPassword !== HOST_ACTION_PASSWORD) {
+    if (!isValidHostPassword(currentPassword)) {
         return res.status(401).json({ error: 'Access Denied: Wrong attempt. Current admin password is incorrect.' });
     }
 
@@ -404,7 +410,7 @@ app.post('/api/admin/update-settings', (req, res) => {
 // API: Verify admin password for remote client deletion
 app.post('/api/verify-password', (req, res) => {
     const { password } = req.body || {};
-    if (password === ADMIN_PASSWORD) {
+    if (isValidHostPassword(password)) {
         return res.json({ success: true });
     }
     return res.status(401).json({ success: false, error: 'Access Denied: Wrong attempt. Unauthorized attempt recorded.' });
@@ -448,7 +454,7 @@ app.delete('/api/files/:filename', verifySystemIntegrity, (req, res) => {
 
     const isHost = isHostRequest(req);
     const providedPassword = req.headers['x-admin-password'];
-    const isAuthorized = isHost || (config.allowRemoteDeleteWithPassword && providedPassword === ADMIN_PASSWORD);
+    const isAuthorized = isHost || (config.allowRemoteDeleteWithPassword && isValidHostPassword(providedPassword));
 
     if (!isAuthorized) {
         return res.status(403).json({
@@ -606,7 +612,7 @@ app.use((req, res) => {
 function getProcessOnPort(port) {
     if (process.platform !== 'win32') return null;
     try {
-        const netstat = execSync('netstat -ano -p tcp', { encoding: 'utf8' });
+        const netstat = execSync('netstat -ano -p tcp', { encoding: 'utf8', windowsHide: true });
         const lines = netstat.split('\n');
         for (const line of lines) {
             if (line.includes(':' + port) && line.includes('LISTENING')) {
@@ -615,7 +621,7 @@ function getProcessOnPort(port) {
                 if (pid && !isNaN(pid) && parseInt(pid) > 0) {
                     let procName = 'Unknown Application';
                     try {
-                        const task = execSync(`tasklist /fi "PID eq ${pid}" /fo csv /nh`, { encoding: 'utf8' });
+                        const task = execSync(`tasklist /fi "PID eq ${pid}" /fo csv /nh`, { encoding: 'utf8', windowsHide: true });
                         const match = task.match(/"([^"]+)"/);
                         if (match) procName = match[1];
                     } catch (e) {}
@@ -654,7 +660,7 @@ Write-Output $res
 `;
         const encoded = Buffer.from(psScript, 'utf16le').toString('base64');
         const cmd = `powershell.exe -WindowStyle Hidden -NoProfile -EncodedCommand ${encoded}`;
-        const result = execSync(cmd, { encoding: 'utf8' }).trim();
+        const result = execSync(cmd, { encoding: 'utf8', windowsHide: true }).trim();
         return result.includes('Yes');
     } catch (e) {
         return false;
@@ -663,7 +669,7 @@ Write-Output $res
 
 function killProcess(pid) {
     try {
-        execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' });
+        execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore', windowsHide: true });
         return true;
     } catch (e) {
         return false;
@@ -683,7 +689,7 @@ ${cleanMsg}
 `;
             const encoded = Buffer.from(psScript, 'utf16le').toString('base64');
             const cmd = `powershell.exe -WindowStyle Hidden -NoProfile -EncodedCommand ${encoded}`;
-            execSync(cmd, { stdio: 'ignore' });
+            execSync(cmd, { stdio: 'ignore', windowsHide: true });
         } catch (e) {}
     }
 }
@@ -694,7 +700,7 @@ const handleShutdown = (req, res) => {
         return res.status(403).json({ error: 'Permission Denied: Only host computer can shutdown the server.' });
     }
     const { password } = req.body || {};
-    if (password !== HOST_ACTION_PASSWORD) {
+    if (!isValidHostPassword(password)) {
         return res.status(401).json({ error: 'Access Denied: Wrong attempt.' });
     }
 
@@ -718,30 +724,18 @@ function startSystemTray(port, lanUrl) {
 
     try {
         const trayScriptPath = path.join(os.tmpdir(), 'kryin-tray.ps1');
-        const exePath = (process.execPath || '').replace(/'/g, "''");
 
         const psTrayScript = `param (
     [int]$ServerPid = 0,
     [int]$Port = ${port},
-    [string]$LanUrl = "${lanUrl}",
-    [string]$ExePath = "${exePath}"
+    [string]$LanUrl = "${lanUrl}"
 )
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 $notify = New-Object System.Windows.Forms.NotifyIcon
-
-try {
-    if ($ExePath -and (Test-Path $ExePath)) {
-        $notify.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($ExePath)
-    } else {
-        $notify.Icon = [System.Drawing.SystemIcons]::Application
-    }
-} catch {
-    $notify.Icon = [System.Drawing.SystemIcons]::Application
-}
-
+$notify.Icon = [System.Drawing.SystemIcons]::Application
 $notify.Text = "Kryin Local File Hub - Port $Port"
 $notify.Visible = $true
 
@@ -812,15 +806,16 @@ $timer.Start()
         fs.writeFileSync(trayScriptPath, psTrayScript, 'utf8');
 
         trayProcess = spawn('powershell.exe', [
+            '-NoLogo',
+            '-NonInteractive',
             '-WindowStyle', 'Hidden',
             '-NoProfile',
             '-ExecutionPolicy', 'Bypass',
             '-File', trayScriptPath,
             '-ServerPid', String(process.pid),
             '-Port', String(port),
-            '-LanUrl', lanUrl,
-            '-ExePath', process.execPath
-        ], { detached: true, stdio: 'ignore' });
+            '-LanUrl', lanUrl
+        ], { detached: true, stdio: 'ignore', windowsHide: true });
         trayProcess.unref();
 
     } catch (e) {
@@ -855,9 +850,6 @@ function startServer(targetPort, attemptsLeft = 10) {
         const localUrl = `http://localhost:${PORT}`;
         const networkUrl = `http://${realLanIp}:${PORT}`;
 
-        // Initialize Windows System Tray Icon (under the taskbar arrow)
-        startSystemTray(PORT, networkUrl);
-
         console.log('\n======================================================');
         console.log('  LOCAL FILE HUB - CREATED BY ARTH PUROHIT');
         console.log('  Portfolio: https://arth-hub.vercel.app/');
@@ -874,12 +866,12 @@ function startServer(targetPort, attemptsLeft = 10) {
         }
         console.log('======================================================\n');
 
-        // Auto-open browser on manual launch (unless --background flag is passed)
+        // Auto-open browser immediately on manual launch
         const isBackground = process.argv.includes('--background') || process.argv.includes('-b') || process.argv.includes('--silent');
         if (!isBackground && config.autoOpenBrowser !== false) {
             try {
                 if (process.platform === 'win32') {
-                    exec(`start "" "${localUrl}"`);
+                    exec(`start "" "${localUrl}"`, { windowsHide: true });
                 } else if (process.platform === 'darwin') {
                     exec(`open ${localUrl}`);
                 } else {
@@ -887,6 +879,11 @@ function startServer(targetPort, attemptsLeft = 10) {
                 }
             } catch (e) {}
         }
+
+        // Initialize Windows System Tray Icon in background (non-blocking)
+        setTimeout(() => {
+            startSystemTray(PORT, networkUrl);
+        }, 80);
     });
 
     server.on('error', async (err) => {
@@ -896,7 +893,7 @@ function startServer(targetPort, attemptsLeft = 10) {
             try {
                 const checkRes = await fetch(`http://127.0.0.1:${targetPort}/api/status`, {
                     headers: { 'X-Arth-Signature': AUTHOR_SIGNATURE },
-                    signal: AbortSignal.timeout(500)
+                    signal: AbortSignal.timeout(400)
                 });
                 const json = await checkRes.json().catch(() => ({}));
                 if (json.app === 'Local File Hub') {
@@ -913,7 +910,7 @@ function startServer(targetPort, attemptsLeft = 10) {
                 if (!isBackground && config.autoOpenBrowser !== false) {
                     try {
                         if (process.platform === 'win32') {
-                            exec(`start "" "${localUrl}"`);
+                            exec(`start "" "${localUrl}"`, { windowsHide: true });
                         } else if (process.platform === 'darwin') {
                             exec(`open ${localUrl}`);
                         } else {

@@ -52,6 +52,7 @@ Packaged as a standalone portable Windows executable (`KryinLocalFile.exe`) with
 ## ✨ Features
 
 - 🖥️ **Zero-Console Execution**: Compiled with the Windows GUI PE subsystem. Double-clicking the `.exe` opens your sleek browser dashboard directly without any flashing black terminal windows.
+- 📌 **Windows System Tray Integration**: Sits cleanly under the taskbar notification tray (`^` arrow). Right-click menu allows you to open dashboard in browser, copy LAN link, change port/config, or cleanly stop the server just like Docker Desktop.
 - ⚙️ **Host Admin Control Panel**: Dedicated, password-protected control modal accessible only to the host computer. Customize the server HTTP port, update host administrator passwords, configure Windows autostart, inspect live network IPs, and control background server processes.
 - 🔄 **Windows Autostart (Background Service)**: Toggle "Start with Windows" directly from the Admin Panel. Runs silently in the background on startup (`--background`) ready for LAN requests.
 - ⚡ **High-Speed Chunked Streaming**: Automatically slices large files into 50MB chunks with automatic retry logic and server-side reassembly, easily handling 10GB+ files without memory leaks.
@@ -93,6 +94,7 @@ You can customize port, password, and browser behavior in `config.json`:
 ```json
 {
   "port": 20260,
+  "hostActionPassword": "2026",
   "adminPassword": "kryinadmin",
   "allowRemoteDeleteWithPassword": true,
   "autoOpenBrowser": true
@@ -102,6 +104,7 @@ You can customize port, password, and browser behavior in `config.json`:
 | Field | Type | Description | Default |
 |---|---|---|---|
 | `port` | `number` | Port for the HTTP server to listen on (auto-falls back if port is occupied) | `20260` |
+| `hostActionPassword` | `string` | Host admin password to unlock admin controls, shutdown server & autostart | `"2026"` (or `"kryinadmin"`) |
 | `adminPassword` | `string` | Password required by remote LAN devices to delete files & manage settings | `"kryinadmin"` |
 | `allowRemoteDeleteWithPassword` | `boolean` | Allow remote network users to delete files with password | `true` |
 | `autoOpenBrowser` | `boolean` | Automatically open default browser on manual launch | `true` |
