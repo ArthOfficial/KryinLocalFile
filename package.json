@@ -1,0 +1,27 @@
+{
+  "name": "kryin-local-file",
+  "version": "1.0.0",
+  "description": "Kryin Local File Hub - Ultra-fast peer-to-peer LAN storage, chunked streaming file transfer, and background autostart",
+  "main": "server.js",
+  "bin": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build:exe": "node build-exe.js"
+  },
+  "keywords": [
+    "filemanager",
+    "local-sharing",
+    "lan-storage",
+    "chunked-upload",
+    "kryin"
+  ],
+  "author": "Kryin",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "ip": "^2.0.1",
+    "multer": "^2.0.2"
+  }
+}
