@@ -16,7 +16,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const cors = require('cors');
-const { exec, execSync } = require('child_process');
+const { exec, execSync, spawn } = require('child_process');
 
 // App & Core Path Resolutions (Compatible with both Node.js and standalone .exe builds)
 const app = express();
@@ -38,21 +38,103 @@ if (!fs.existsSync(TEMP_DIR)) {
     fs.mkdirSync(TEMP_DIR, { recursive: true });
 }
 
-// Load configuration
+// Helper to parse JSON with comments (supports // and /* */ comments)
+function parseJsonWithComments(str) {
+    if (!str || typeof str !== 'string') return {};
+    try {
+        return JSON.parse(str);
+    } catch (e) {
+        try {
+            const clean = str
+                .replace(/\/\*[\s\S]*?\*\//g, '')
+                .replace(/(^|[^\\:])\/\/.*$/gm, '$1');
+            return JSON.parse(clean);
+        } catch (e2) {
+            return {};
+        }
+    }
+}
+
+// Load configuration from config.json (Central properties file)
 let config = {
+    "//_comment_showTerminal": "Set to true to show the default server terminal with startup details, IP addresses, and live error logs (closing it stops server), or false to run hidden",
+    showTerminal: true,
     port: 20260,
-    adminPassword: 'kryinadmin',
     hostActionPassword: '2026',
+    deletePassword: 'kryinadmin',
+    adminPassword: 'kryinadmin',
     allowRemoteDeleteWithPassword: true,
     autoOpenBrowser: true
 };
-const configPath = path.join(ROOT_DIR, 'config.json');
+
+let configPath = path.join(ROOT_DIR, 'config.json');
+if (!fs.existsSync(configPath)) {
+    const exeConfigPath = path.join(path.dirname(process.execPath), 'config.json');
+    if (fs.existsSync(exeConfigPath)) {
+        configPath = exeConfigPath;
+    }
+}
+
 if (fs.existsSync(configPath)) {
     try {
-        config = { ...config, ...JSON.parse(fs.readFileSync(configPath, 'utf8')) };
+        const rawContent = fs.readFileSync(configPath, 'utf8');
+        config = { ...config, ...parseJsonWithComments(rawContent) };
     } catch (e) {
-        console.warn('Notice: Could not parse config.json, using default configuration.');
+        console.warn('Notice: Could not parse config.json, using configuration from file/defaults.');
     }
+} else {
+    // Auto-create config.json so the user can easily view and edit all server properties in one place
+    try {
+        const initialConfig = {
+            "//_comment_showTerminal": "Set to true to show the default server terminal with startup details, IP addresses, and live error logs (closing it stops server), or false to run hidden",
+            "showTerminal": true,
+            "port": 20260,
+            "hostActionPassword": "2026",
+            "deletePassword": "kryinadmin",
+            "adminPassword": "kryinadmin",
+            "allowRemoteDeleteWithPassword": true,
+            "autoOpenBrowser": true
+        };
+        fs.writeFileSync(configPath, JSON.stringify(initialConfig, null, 2), 'utf8');
+    } catch (e) {}
+}
+
+// Native Windows Console Visibility Control
+function setConsoleVisibility(visible) {
+    if (process.platform !== 'win32') return;
+    try {
+        const action = visible ? 5 : 0; // 5 = SW_SHOW, 0 = SW_HIDE
+        const psScript = path.join(os.tmpdir(), 'kryin-console-visibility.ps1');
+        if (!fs.existsSync(psScript)) {
+            const code = `param([int]$Action = 0)
+$sig = @'
+using System;
+using System.Runtime.InteropServices;
+public class Win32Con {
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
+}
+'@
+if (-not ([System.Management.Automation.PSTypeName]'Win32Con').Type) {
+    Add-Type -TypeDefinition $sig -ErrorAction SilentlyContinue
+}
+$h = [Win32Con]::GetConsoleWindow()
+if ($h -ne [IntPtr]::Zero) {
+    [Win32Con]::ShowWindow($h, $Action)
+}
+`;
+            fs.writeFileSync(psScript, code, 'utf8');
+        }
+        exec(`powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${psScript}" -Action ${action}`, {
+            windowsHide: true,
+            stdio: 'ignore'
+        });
+    } catch (e) {}
+}
+
+const isBackgroundMode = process.argv.includes('--background') || process.argv.includes('-b') || process.argv.includes('--silent');
+if (config.showTerminal === false || isBackgroundMode) {
+    setConsoleVisibility(false);
 }
 
 const INSTANCE_LOCK_FILE = path.join(os.tmpdir(), 'kryin-hub.lock');
@@ -93,13 +175,21 @@ function checkSingleInstance() {
 checkSingleInstance();
 
 let PORT = process.env.PORT || config.port || 20260;
-let ADMIN_PASSWORD = config.adminPassword || 'kryinadmin';
+let ADMIN_PASSWORD = config.deletePassword || config.adminPassword || 'kryinadmin';
 let HOST_ACTION_PASSWORD = config.hostActionPassword || '2026';
 
 function isValidHostPassword(pass) {
     if (!pass) return false;
     const clean = String(pass).trim();
-    return clean === HOST_ACTION_PASSWORD || clean === ADMIN_PASSWORD;
+    return clean === (config.hostActionPassword || HOST_ACTION_PASSWORD);
+}
+
+function isValidDeletePassword(pass) {
+    if (!pass) return false;
+    const clean = String(pass).trim();
+    const currentDelete = config.deletePassword || config.adminPassword || ADMIN_PASSWORD;
+    const currentHost = config.hostActionPassword || HOST_ACTION_PASSWORD;
+    return clean === currentDelete || clean === currentHost;
 }
 
 // App Tokens & Author Info
@@ -120,6 +210,18 @@ try {
 
 app.use(cors());
 app.use(express.json());
+
+// Request logging for console terminal
+app.use((req, res, next) => {
+    if (req.url !== '/favicon.ico' && !req.url.startsWith('/style.css') && !req.url.startsWith('/app.js') && !req.url.startsWith('/logo.png')) {
+        const start = Date.now();
+        res.on('finish', () => {
+            const duration = Date.now() - start;
+            console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url} - ${res.statusCode} (${duration}ms)`);
+        });
+    }
+    next();
+});
 
 // Deliver critical UI assets (serves disk file or falls back to compiled embedded assets)
 app.get('/style.css', (req, res) => {
@@ -346,7 +448,8 @@ app.get('/api/status', (req, res) => {
         portfolio: AUTHOR_INFO.portfolio,
         github: AUTHOR_INFO.github,
         app: AUTHOR_INFO.app,
-        allowRemoteDelete: config.allowRemoteDeleteWithPassword
+        allowRemoteDelete: config.allowRemoteDeleteWithPassword,
+        showTerminal: Boolean(config.showTerminal)
     });
 });
 
@@ -405,12 +508,12 @@ app.post('/api/admin/verify', (req, res) => {
     return res.status(401).json({ success: false, error: 'Access Denied: Wrong attempt. Unauthorized attempt recorded.' });
 });
 
-// API: Update Host Configuration (Port & Admin Passwords)
+// API: Update Host Configuration (Port, Master Admin Password, & File Deletion Password)
 app.post('/api/admin/update-settings', (req, res) => {
     if (!isHostRequest(req)) {
         return res.status(403).json({ error: 'Permission Denied: Only host computer can change server settings.' });
     }
-    const { currentPassword, newAdminPassword, newPort, newRemotePassword } = req.body || {};
+    const { currentPassword, newAdminPassword, newDeletePassword, newPort, newRemotePassword } = req.body || {};
 
     if (!isValidHostPassword(currentPassword)) {
         return res.status(401).json({ error: 'Access Denied: Wrong attempt. Current admin password is incorrect.' });
@@ -418,21 +521,24 @@ app.post('/api/admin/update-settings', (req, res) => {
 
     let changed = false;
 
-    // Update Host Admin Password
+    // Update Master Host Admin Password
     if (newAdminPassword && typeof newAdminPassword === 'string' && newAdminPassword.trim().length > 0) {
         if (newAdminPassword.trim().length < 3) {
-            return res.status(400).json({ error: 'New password must be at least 3 characters long.' });
+            return res.status(400).json({ error: 'New admin password must be at least 3 characters long.' });
         }
         config.hostActionPassword = newAdminPassword.trim();
         HOST_ACTION_PASSWORD = config.hostActionPassword;
-        config.adminPassword = config.hostActionPassword;
-        ADMIN_PASSWORD = config.adminPassword;
         changed = true;
     }
 
-    // Update Remote Client Delete Password (if specifically provided)
-    if (newRemotePassword && typeof newRemotePassword === 'string' && newRemotePassword.trim().length >= 3) {
-        config.adminPassword = newRemotePassword.trim();
+    // Update File Deletion Password (for remote clients deleting files)
+    const targetDeletePass = newDeletePassword || newRemotePassword;
+    if (targetDeletePass && typeof targetDeletePass === 'string' && targetDeletePass.trim().length > 0) {
+        if (targetDeletePass.trim().length < 3) {
+            return res.status(400).json({ error: 'New deletion password must be at least 3 characters long.' });
+        }
+        config.adminPassword = targetDeletePass.trim();
+        config.deletePassword = targetDeletePass.trim();
         ADMIN_PASSWORD = config.adminPassword;
         changed = true;
     }
@@ -446,6 +552,14 @@ app.post('/api/admin/update-settings', (req, res) => {
         config.port = portNum;
         PORT = portNum;
         changed = true;
+    }
+
+    // Update showTerminal setting
+    const { showTerminal } = req.body || {};
+    if (typeof showTerminal === 'boolean') {
+        config.showTerminal = showTerminal;
+        changed = true;
+        setConsoleVisibility(config.showTerminal);
     }
 
     if (changed) {
@@ -471,7 +585,7 @@ app.post('/api/admin/update-settings', (req, res) => {
 // API: Verify admin password for remote client deletion
 app.post('/api/verify-password', (req, res) => {
     const { password } = req.body || {};
-    if (isValidHostPassword(password)) {
+    if (isValidDeletePassword(password)) {
         return res.json({ success: true });
     }
     return res.status(401).json({ success: false, error: 'Access Denied: Wrong attempt. Unauthorized attempt recorded.' });
@@ -515,11 +629,11 @@ app.delete('/api/files/:filename', verifySystemIntegrity, (req, res) => {
 
     const isHost = isHostRequest(req);
     const providedPassword = req.headers['x-admin-password'];
-    const isAuthorized = isHost || (config.allowRemoteDeleteWithPassword && isValidHostPassword(providedPassword));
+    const isAuthorized = isHost || (config.allowRemoteDeleteWithPassword && isValidDeletePassword(providedPassword));
 
     if (!isAuthorized) {
         return res.status(403).json({
-            error: 'Permission Denied: Only the host machine running this server or users with the admin password can delete files.',
+            error: 'Permission Denied: Only the host machine running this server or users with the deletion password can delete files.',
             requiresPassword: !isHost
         });
     }

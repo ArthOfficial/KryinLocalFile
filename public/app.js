@@ -59,6 +59,7 @@
     const adminAuthSubmitBtn = document.getElementById('admin-auth-submit-btn');
     const adminDashboardCloseBtn = document.getElementById('admin-dashboard-close-btn');
     const adminAutostartToggle = document.getElementById('admin-autostart-toggle');
+    const adminTerminalToggle = document.getElementById('admin-terminal-toggle');
     const adminShutdownBtn = document.getElementById('admin-shutdown-btn');
     const adminLanIp = document.getElementById('admin-lan-ip');
     const adminLanUrl = document.getElementById('admin-lan-url');
@@ -88,6 +89,15 @@
     const cpConfirmPassword = document.getElementById('cp-confirm-password');
     const cpCancelBtn = document.getElementById('cp-cancel-btn');
     const cpSubmitBtn = document.getElementById('cp-submit-btn');
+
+    // Change File Deletion Password Modal Elements
+    const openChangeDeletePasswordModalBtn = document.getElementById('open-change-delete-password-modal-btn');
+    const changeDeletePasswordModal = document.getElementById('change-delete-password-modal');
+    const cdpAdminPassword = document.getElementById('cdp-admin-password');
+    const cdpNewPassword = document.getElementById('cdp-new-password');
+    const cdpConfirmPassword = document.getElementById('cdp-confirm-password');
+    const cdpCancelBtn = document.getElementById('cdp-cancel-btn');
+    const cdpSubmitBtn = document.getElementById('cdp-submit-btn');
 
     // Progress Elements
     const progressContainer = document.getElementById('progress-container');
@@ -143,6 +153,9 @@
                 if (adminServerPort) adminServerPort.textContent = data.port || 20260;
                 if (currentPortText) currentPortText.textContent = data.port || 20260;
                 if (editPortInput) editPortInput.value = data.port || 20260;
+                if (adminTerminalToggle && typeof data.showTerminal !== 'undefined') {
+                    adminTerminalToggle.checked = Boolean(data.showTerminal);
+                }
 
                 // Inform host user if server auto-shifted ports due to a port conflict
                 if (data.fallbackFromPort && !window.__portFallbackAlertShown) {
@@ -724,6 +737,33 @@
             });
         }
 
+        // Admin Live Terminal Toggle
+        if (adminTerminalToggle) {
+            adminTerminalToggle.addEventListener('change', async () => {
+                const desired = adminTerminalToggle.checked;
+                try {
+                    const res = await fetch('/api/admin/update-settings', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Arth-Signature': INTEGRITY_TOKEN
+                        },
+                        body: JSON.stringify({ showTerminal: desired, currentPassword: verifiedAdminPassword })
+                    });
+                    const result = await res.json();
+                    if (res.ok && result.success) {
+                        showToast(desired ? 'Live Terminal opened. Closing that window will stop the server.' : 'Live Terminal hidden (running in background)', 'success');
+                    } else {
+                        adminTerminalToggle.checked = !desired;
+                        showToast(result.error || 'Failed to update live terminal setting.', 'error', 'Security Alert');
+                    }
+                } catch (e) {
+                    adminTerminalToggle.checked = !desired;
+                    showToast('Error updating live terminal setting', 'error');
+                }
+            });
+        }
+
         // Port Change Workflow (Locked View -> Edit Mode -> Save)
         if (unlockPortBtn && portViewMode && portEditMode) {
             unlockPortBtn.addEventListener('click', () => {
@@ -919,49 +959,129 @@
             }
         });
 
-        // Admin Shutdown Button
-        if (adminShutdownBtn) {
-            adminShutdownBtn.addEventListener('click', async () => {
-                if (!confirm('Are you sure you want to stop the local background server?')) {
-                    return;
+        // Change File Deletion Password Modal Workflow
+        function openChangeDeletePasswordModal() {
+            if (!changeDeletePasswordModal) return;
+            changeDeletePasswordModal.classList.add('visible');
+            if (cdpAdminPassword) {
+                cdpAdminPassword.value = '';
+                setTimeout(() => cdpAdminPassword.focus(), 100);
+            }
+            if (cdpNewPassword) cdpNewPassword.value = '';
+            if (cdpConfirmPassword) cdpConfirmPassword.value = '';
+        }
+
+        function closeChangeDeletePasswordModal() {
+            if (!changeDeletePasswordModal) return;
+            changeDeletePasswordModal.classList.remove('visible');
+            if (cdpAdminPassword) cdpAdminPassword.value = '';
+            if (cdpNewPassword) cdpNewPassword.value = '';
+            if (cdpConfirmPassword) cdpConfirmPassword.value = '';
+        }
+
+        if (openChangeDeletePasswordModalBtn) {
+            openChangeDeletePasswordModalBtn.addEventListener('click', openChangeDeletePasswordModal);
+        }
+        if (cdpCancelBtn) {
+            cdpCancelBtn.addEventListener('click', closeChangeDeletePasswordModal);
+        }
+        if (changeDeletePasswordModal) {
+            changeDeletePasswordModal.addEventListener('click', (e) => {
+                if (e.target === changeDeletePasswordModal) closeChangeDeletePasswordModal();
+            });
+        }
+
+        async function submitDeletePasswordChange() {
+            if (!cdpSubmitBtn) return;
+            const adminPass = cdpAdminPassword ? cdpAdminPassword.value.trim() : '';
+            const newPass = cdpNewPassword ? cdpNewPassword.value.trim() : '';
+            const confirmPass = cdpConfirmPassword ? cdpConfirmPassword.value.trim() : '';
+
+            if (!adminPass) {
+                showToast('Please enter your host admin password.', 'warning', 'Password Required');
+                if (cdpAdminPassword) cdpAdminPassword.focus();
+                return;
+            }
+
+            if (!newPass) {
+                showToast('Please enter a new file deletion password.', 'warning', 'Password Required');
+                if (cdpNewPassword) cdpNewPassword.focus();
+                return;
+            }
+
+            if (newPass.length < 3) {
+                showToast('New deletion password must be at least 3 characters long.', 'error', 'Invalid Password');
+                if (cdpNewPassword) cdpNewPassword.focus();
+                return;
+            }
+
+            if (newPass !== confirmPass) {
+                showToast('New deletion passwords do not match. Please verify.', 'error', 'Mismatch');
+                if (cdpConfirmPassword) {
+                    cdpConfirmPassword.value = '';
+                    cdpConfirmPassword.focus();
                 }
-                try {
-                    const res = await fetch('/api/system/shutdown', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Arth-Signature': INTEGRITY_TOKEN
-                        },
-                        body: JSON.stringify({ password: verifiedAdminPassword })
-                    });
-                    if (res.ok) {
-                        adminPanelModal.classList.remove('visible');
-                        document.body.innerHTML = `
-                            <div style="display:flex; align-items:center; justify-content:center; min-height:100vh; background:#0c0e11; color:#f0f3f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align:center;">
-                                <div style="padding: 24px; border: 1px solid #242930; border-radius: 12px; background: #14171b; max-width: 400px;">
-                                    <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(45, 104, 196, 0.15); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
-                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
-                                    </div>
-                                    <h2 style="font-size:20px; font-weight:600; margin-bottom:8px;">Local File Hub Stopped</h2>
-                                    <p style="color:#8d96a0; font-size:13px; line-height:1.5;">The background server has been safely stopped. You can close this browser tab.</p>
-                                </div>
-                            </div>`;
-                    } else {
-                        showToast('Failed to stop server', 'error');
+                return;
+            }
+
+            cdpSubmitBtn.disabled = true;
+            cdpSubmitBtn.textContent = 'Updating...';
+
+            try {
+                const res = await fetch('/api/admin/update-settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Arth-Signature': INTEGRITY_TOKEN
+                    },
+                    body: JSON.stringify({
+                        currentPassword: adminPass,
+                        newDeletePassword: newPass
+                    })
+                });
+
+                const result = await res.json();
+                if (res.ok && result.success) {
+                    closeChangeDeletePasswordModal();
+                    showToast('File deletion password updated successfully and saved to config.json.', 'success', 'Password Updated');
+                } else {
+                    showToast(result.error || 'Access Denied: Wrong attempt. Admin password is incorrect.', 'error', 'Security Alert');
+                    if (cdpAdminPassword) {
+                        cdpAdminPassword.value = '';
+                        cdpAdminPassword.focus();
                     }
-                } catch (e) {
-                    showToast('Error sending shutdown command', 'error');
                 }
+            } catch (err) {
+                showToast('Network error while updating deletion password: ' + err.message, 'error');
+            } finally {
+                cdpSubmitBtn.disabled = false;
+                cdpSubmitBtn.textContent = 'Update Deleting Password';
+            }
+        }
+
+        if (cdpSubmitBtn) cdpSubmitBtn.addEventListener('click', submitDeletePasswordChange);
+        [cdpAdminPassword, cdpNewPassword, cdpConfirmPassword].forEach(input => {
+            if (input) {
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') submitDeletePasswordChange();
+                    if (e.key === 'Escape') closeChangeDeletePasswordModal();
+                });
+            }
+        });
+
+        // Admin Shutdown Button (opens confirmation modal requiring admin password)
+        if (adminShutdownBtn) {
+            adminShutdownBtn.addEventListener('click', () => {
+                adminPanelModal.classList.remove('visible');
+                openStopServerModal();
             });
         }
 
         // Quick Stop Server UI Handlers
         function openStopServerModal() {
             if (!stopServerModal) return;
-            if (verifiedAdminPassword && stopServerPassInput) {
-                stopServerPassInput.value = verifiedAdminPassword;
-            } else if (stopServerPassInput) {
-                stopServerPassInput.value = '';
+            if (stopServerPassInput) {
+                stopServerPassInput.value = ''; // Always require typing password explicitly
             }
             stopServerModal.classList.add('visible');
             setTimeout(() => {

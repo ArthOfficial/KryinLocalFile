@@ -94,8 +94,11 @@ You can customize port, password, and browser behavior in `config.json`:
 
 ```json
 {
+  "//_comment_showTerminal": "Set to true to show the default server terminal with startup details, IP addresses, and live error logs (closing it stops server), or false to run hidden",
+  "showTerminal": true,
   "port": 20260,
   "hostActionPassword": "2026",
+  "deletePassword": "kryinadmin",
   "adminPassword": "kryinadmin",
   "allowRemoteDeleteWithPassword": true,
   "autoOpenBrowser": true
@@ -104,9 +107,10 @@ You can customize port, password, and browser behavior in `config.json`:
 
 | Field | Type | Description | Default |
 |---|---|---|---|
+| `showTerminal` | `boolean` | Display the default server terminal with startup details, IPs, & live logs (closing window stops server). Set `false` for hidden background execution | `true` |
 | `port` | `number` | Port for the HTTP server to listen on (auto-falls back if port is occupied) | `20260` |
 | `hostActionPassword` | `string` | Host admin password to unlock admin controls, shutdown server & autostart | `"2026"` (or `"kryinadmin"`) |
-| `adminPassword` | `string` | Password required by remote LAN devices to delete files & manage settings | `"kryinadmin"` |
+| `deletePassword` / `adminPassword` | `string` | Password required by remote LAN devices to delete files & manage settings | `"kryinadmin"` |
 | `allowRemoteDeleteWithPassword` | `boolean` | Allow remote network users to delete files with password | `true` |
 | `autoOpenBrowser` | `boolean` | Automatically open default browser on manual launch | `true` |
 

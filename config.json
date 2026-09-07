@@ -1,7 +1,10 @@
 {
+  "//_comment_showTerminal": "Set to true to show the default server terminal with startup details, IP addresses, and live error logs (closing it stops server), or false to run hidden",
+  "showTerminal": true,
   "port": 20260,
-  "adminPassword": "kryinadmin",
   "hostActionPassword": "2026",
+  "deletePassword": "kryinadmin",
+  "adminPassword": "kryinadmin",
   "allowRemoteDeleteWithPassword": true,
   "autoOpenBrowser": true
 }

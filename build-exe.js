@@ -67,25 +67,13 @@ try {
         { stdio: 'inherit', cwd: ROOT_DIR }
     );
 
-    // 7. Patch PE header Subsystem to 2 (IMAGE_SUBSYSTEM_WINDOWS_GUI) to prevent console window
-    console.log('[6/6] Patching PE subsystem to Windows GUI (zero console window)...');
-    const fd = fs.openSync(OUTPUT_EXE, 'r+');
-    const headerBuf = Buffer.alloc(1024);
-    fs.readSync(fd, headerBuf, 0, 1024, 0);
-    const peOffset = headerBuf.readUInt32LE(0x3c);
-    const subsystemOffset = peOffset + 24 + 68;
-    const writeBuf = Buffer.alloc(2);
-    writeBuf.writeUInt16LE(2, 0);
-    fs.writeSync(fd, writeBuf, 0, 2, subsystemOffset);
-    fs.closeSync(fd);
-
     const stats = fs.statSync(OUTPUT_EXE);
     const sizeMb = (stats.size / (1024 * 1024)).toFixed(1);
 
     console.log('\n========================================================');
     console.log('  BUILD COMPLETE!');
     console.log(`  Executable: ${OUTPUT_EXE} (${sizeMb} MB)`);
-    console.log('  Self-contained Windows executable ready with GUI subsystem.');
+    console.log('  Self-contained Windows executable ready with native console terminal.');
     console.log('========================================================\n');
 } catch (error) {
     console.error('\nBuild failed:', error.message);

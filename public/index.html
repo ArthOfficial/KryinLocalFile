@@ -194,7 +194,7 @@
                         <label for="admin-panel-pass-input" class="field-label">Host Admin Password</label>
                         <input type="password" id="admin-panel-pass-input" class="field-input"
                             placeholder="Enter admin password..." autocomplete="off">
-                        <span class="field-hint">Required for host settings. Default: <code>2026</code> (or <code>kryinadmin</code>).</span>
+                        <span class="field-hint">Authorized host administrator password is required.</span>
                     </div>
                 </div>
                 <div class="modal-actions">
@@ -226,6 +226,18 @@
                         </div>
                         <label class="autostart-toggle-wrap">
                             <input type="checkbox" id="admin-autostart-toggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <!-- Setting: Live Terminal Window -->
+                    <div class="admin-setting-card">
+                        <div class="setting-info">
+                            <span class="setting-title">Show Live Terminal Window</span>
+                            <span class="setting-desc">Display console window with IP addresses and transfer logs (closing window stops server).</span>
+                        </div>
+                        <label class="autostart-toggle-wrap">
+                            <input type="checkbox" id="admin-terminal-toggle">
                             <span class="toggle-slider"></span>
                         </label>
                     </div>
@@ -279,11 +291,11 @@
                         </div>
                     </div>
 
-                    <!-- Setting: Admin Security Credentials -->
+                    <!-- Setting: Master Admin Security Credentials -->
                     <div class="admin-setting-card security-setting-card">
                         <div class="setting-info">
-                            <span class="setting-title">Admin Access Credentials</span>
-                            <span class="setting-desc">Host administrator password used to unlock control panel.</span>
+                            <span class="setting-title">Host Admin Password</span>
+                            <span class="setting-desc">Master password for control panel, changing port, and stopping server.</span>
                         </div>
                         <div class="password-action-wrap">
                             <span class="password-masked-badge">••••••••</span>
@@ -292,7 +304,25 @@
                                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                                     <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                                 </svg>
-                                <span>Change Password</span>
+                                <span>Change Admin Password</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Setting: File Deletion Credentials -->
+                    <div class="admin-setting-card security-setting-card">
+                        <div class="setting-info">
+                            <span class="setting-title">File Deletion Password</span>
+                            <span class="setting-desc">Password required by network clients on Wi-Fi to delete files.</span>
+                        </div>
+                        <div class="password-action-wrap">
+                            <span class="password-masked-badge">••••••••</span>
+                            <button type="button" class="btn-secondary btn-sm" id="open-change-delete-password-modal-btn">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                                <span>Change Deleting Password</span>
                             </button>
                         </div>
                     </div>
@@ -360,6 +390,47 @@
         </div>
     </div>
 
+    <!-- Change File Deletion Password Modal Popup -->
+    <div class="modal-backdrop" id="change-delete-password-modal">
+        <div class="modal-dialog change-password-dialog">
+            <div class="modal-header">
+                <div class="modal-icon-wrap" style="color: #f59e0b; background: rgba(245, 158, 11, 0.12);">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="modal-title">Change File Deletion Password</h3>
+                    <p class="modal-description">Enter admin password to update the file deletion password.</p>
+                </div>
+            </div>
+
+            <div class="modal-body">
+                <div class="password-field-group">
+                    <label for="cdp-admin-password" class="field-label">Current Host Admin Password</label>
+                    <input type="password" id="cdp-admin-password" class="field-input" placeholder="Enter admin password..." autocomplete="off">
+                    <span class="field-hint">Master admin password required to authorize this change.</span>
+                </div>
+
+                <div class="password-field-group">
+                    <label for="cdp-new-password" class="field-label">New File Deletion Password</label>
+                    <input type="password" id="cdp-new-password" class="field-input" placeholder="Enter new deletion password (min 3 chars)..." autocomplete="off">
+                </div>
+
+                <div class="password-field-group">
+                    <label for="cdp-confirm-password" class="field-label">Confirm New Deletion Password</label>
+                    <input type="password" id="cdp-confirm-password" class="field-input" placeholder="Re-enter new deletion password..." autocomplete="off">
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" id="cdp-cancel-btn">Cancel</button>
+                <button type="button" class="btn-primary" id="cdp-submit-btn">Update Deleting Password</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Delete Confirmation & Auth Modal -->
     <div class="modal-backdrop" id="delete-modal">
         <div class="modal-dialog">
@@ -381,10 +452,10 @@
 
                 <!-- Password prompt shown only for remote clients -->
                 <div class="password-field-group" id="delete-password-group" style="display: none;">
-                    <label for="admin-password-input" class="field-label">Host Admin Password</label>
+                    <label for="admin-password-input" class="field-label">File Deletion Password</label>
                     <input type="password" id="admin-password-input" class="field-input"
-                        placeholder="Enter admin password..." autocomplete="off">
-                    <span class="field-hint">Deletion requires authentication from the host server.</span>
+                        placeholder="Enter deletion password..." autocomplete="off">
+                    <span class="field-hint">Password authorization is required to delete files.</span>
                 </div>
             </div>
 
@@ -415,14 +486,14 @@
                 <div class="password-field-group">
                     <label for="stop-server-pass-input" class="field-label">Host Admin Password</label>
                     <input type="password" id="stop-server-pass-input" class="field-input"
-                        placeholder="Enter admin password..." autocomplete="off">
-                    <span class="field-hint">Default: <code>2026</code> (or <code>kryinadmin</code>).</span>
+                        placeholder="Enter admin password to stop server..." autocomplete="off">
+                    <span class="field-hint">Host administrator password is required to stop the server.</span>
                 </div>
             </div>
 
             <div class="modal-actions">
                 <button type="button" class="btn-secondary" id="stop-server-cancel-btn">Cancel</button>
-                <button type="button" class="btn-danger" id="stop-server-confirm-btn">Shut Down Server</button>
+                <button type="button" class="btn-danger" id="stop-server-confirm-btn">Stop Server Now</button>
             </div>
         </div>
     </div>
