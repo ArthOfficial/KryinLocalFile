@@ -6,7 +6,7 @@
  * Copyright (c) Arth Purohit. All rights reserved.
  * 
  * Peer-to-peer LAN storage, chunked streaming file transfer, real Wi-Fi IP
- * sharing, password-protected Windows autostart & server shutdown host controls.
+ * sharing, password-protected Host Admin Control Panel (Autostart & Server Power).
  * =========================================================================
  */
 
@@ -29,6 +29,10 @@
     let pendingDeleteTarget = null;
     let currentLanUrl = '';
 
+    // Admin Session State
+    let isAdminUnlocked = false;
+    let verifiedAdminPassword = '';
+
     // DOM Elements
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
@@ -45,18 +49,20 @@
     const lanUrlDisplay = document.getElementById('lan-url-display');
     const copyLanBtn = document.getElementById('copy-lan-btn');
 
-    // Host Controls
-    const hostControls = document.getElementById('host-controls');
-    const autostartToggle = document.getElementById('autostart-toggle');
-    const shutdownBtn = document.getElementById('shutdown-btn');
-
-    // Host Action Password Modal Elements
-    const hostActionModal = document.getElementById('host-action-modal');
-    const hostActionTitle = document.getElementById('host-action-title');
-    const hostActionSubtitle = document.getElementById('host-action-subtitle');
-    const hostPasswordInput = document.getElementById('host-password-input');
-    const hostActionCancelBtn = document.getElementById('host-action-cancel-btn');
-    const hostActionConfirmBtn = document.getElementById('host-action-confirm-btn');
+    // Host Admin Panel Elements
+    const adminPanelBtn = document.getElementById('admin-panel-btn');
+    const adminPanelModal = document.getElementById('admin-panel-modal');
+    const adminAuthStage = document.getElementById('admin-auth-stage');
+    const adminDashboardStage = document.getElementById('admin-dashboard-stage');
+    const adminPanelPassInput = document.getElementById('admin-panel-pass-input');
+    const adminAuthCancelBtn = document.getElementById('admin-auth-cancel-btn');
+    const adminAuthSubmitBtn = document.getElementById('admin-auth-submit-btn');
+    const adminDashboardCloseBtn = document.getElementById('admin-dashboard-close-btn');
+    const adminAutostartToggle = document.getElementById('admin-autostart-toggle');
+    const adminShutdownBtn = document.getElementById('admin-shutdown-btn');
+    const adminLanIp = document.getElementById('admin-lan-ip');
+    const adminLanUrl = document.getElementById('admin-lan-url');
+    const adminServerPort = document.getElementById('admin-server-port');
 
     // Progress Elements
     const progressContainer = document.getElementById('progress-container');
@@ -65,7 +71,7 @@
     const progressFilename = document.getElementById('progress-filename');
     const progressDetail = document.getElementById('progress-detail');
 
-    // Modal Elements
+    // Delete Modal Elements
     const deleteModal = document.getElementById('delete-modal');
     const deleteModalSubtitle = document.getElementById('delete-modal-subtitle');
     const deleteTargetFilename = document.getElementById('delete-target-filename');
@@ -101,15 +107,17 @@
             if (isHostUser) {
                 dot.className = 'status-dot host';
                 connectionLabel.textContent = 'Server Host (Direct Access)';
-                if (hostControls) {
-                    hostControls.style.display = 'inline-flex';
-                    initAutostartStatus();
+                if (adminPanelBtn) {
+                    adminPanelBtn.style.display = 'inline-flex';
                 }
+                if (adminLanIp) adminLanIp.textContent = data.serverIp || '127.0.0.1';
+                if (adminLanUrl) adminLanUrl.textContent = currentLanUrl;
+                if (adminServerPort) adminServerPort.textContent = data.port || 3000;
             } else {
                 dot.className = 'status-dot client';
                 connectionLabel.textContent = 'Connected via LAN';
-                if (hostControls) {
-                    hostControls.style.display = 'none';
+                if (adminPanelBtn) {
+                    adminPanelBtn.style.display = 'none';
                 }
             }
 
@@ -126,59 +134,18 @@
         }
     }
 
-    // Initialize Windows Autostart Status
-    async function initAutostartStatus() {
+    // Query autostart state for Admin Panel
+    async function updateAutostartToggleState() {
+        if (!adminAutostartToggle) return;
         try {
             const res = await fetch('/api/autostart', {
                 headers: { 'X-Arth-Signature': INTEGRITY_TOKEN }
             });
-            if (!res.ok) return;
-            const data = await res.json();
-            if (data.supported && autostartToggle) {
-                autostartToggle.checked = Boolean(data.enabled);
+            if (res.ok) {
+                const data = await res.json();
+                adminAutostartToggle.checked = Boolean(data.enabled);
             }
-        } catch (e) {
-            console.warn('Could not query autostart status:', e);
-        }
-    }
-
-    // Helper: Modal Password Prompt for Host Actions (Requires 2026)
-    function promptHostPassword(title, subtitle, onConfirm, onCancel) {
-        if (!hostActionModal) return;
-
-        hostActionTitle.textContent = title;
-        hostActionSubtitle.textContent = subtitle;
-        hostPasswordInput.value = '';
-        hostActionModal.classList.add('visible');
-        setTimeout(() => hostPasswordInput.focus(), 100);
-
-        function cleanup() {
-            hostActionModal.classList.remove('visible');
-            hostActionConfirmBtn.onclick = null;
-            hostActionCancelBtn.onclick = null;
-            hostPasswordInput.onkeydown = null;
-        }
-
-        hostActionCancelBtn.onclick = () => {
-            cleanup();
-            if (onCancel) onCancel();
-        };
-
-        hostActionConfirmBtn.onclick = () => {
-            const password = hostPasswordInput.value.trim();
-            if (!password) {
-                showToast('Please enter host password (default: 2026)', 'warning');
-                hostPasswordInput.focus();
-                return;
-            }
-            cleanup();
-            onConfirm(password);
-        };
-
-        hostPasswordInput.onkeydown = (e) => {
-            if (e.key === 'Enter') hostActionConfirmBtn.click();
-            if (e.key === 'Escape') hostActionCancelBtn.click();
-        };
+        } catch (e) {}
     }
 
     // ============================================
@@ -603,6 +570,156 @@
             });
         }
 
+        // Host Admin Panel Trigger
+        if (adminPanelBtn && adminPanelModal) {
+            adminPanelBtn.addEventListener('click', () => {
+                adminPanelModal.classList.add('visible');
+                if (isAdminUnlocked) {
+                    adminAuthStage.style.display = 'none';
+                    adminDashboardStage.style.display = 'block';
+                    updateAutostartToggleState();
+                } else {
+                    adminAuthStage.style.display = 'block';
+                    adminDashboardStage.style.display = 'none';
+                    adminPanelPassInput.value = '';
+                    setTimeout(() => adminPanelPassInput.focus(), 100);
+                }
+            });
+        }
+
+        // Host Admin Auth Cancel
+        if (adminAuthCancelBtn) {
+            adminAuthCancelBtn.addEventListener('click', () => {
+                adminPanelModal.classList.remove('visible');
+            });
+        }
+
+        // Host Admin Auth Submit (Verifies 2026 with Server)
+        if (adminAuthSubmitBtn && adminPanelPassInput) {
+            async function submitAdminPassword() {
+                const enteredPass = adminPanelPassInput.value.trim();
+                if (!enteredPass) {
+                    showToast('Please enter password (default: 2026)', 'warning');
+                    adminPanelPassInput.focus();
+                    return;
+                }
+                adminAuthSubmitBtn.disabled = true;
+                adminAuthSubmitBtn.textContent = 'Verifying...';
+
+                try {
+                    const res = await fetch('/api/admin/verify', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Arth-Signature': INTEGRITY_TOKEN
+                        },
+                        body: JSON.stringify({ password: enteredPass })
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        isAdminUnlocked = true;
+                        verifiedAdminPassword = enteredPass;
+                        adminAuthStage.style.display = 'none';
+                        adminDashboardStage.style.display = 'block';
+                        await updateAutostartToggleState();
+                        showToast('Host Admin Panel Unlocked', 'success');
+                    } else {
+                        showToast(data.error || 'Incorrect password.', 'error', 'Authentication Failed');
+                        adminPanelPassInput.focus();
+                    }
+                } catch (e) {
+                    showToast('Failed to verify admin password', 'error');
+                } finally {
+                    adminAuthSubmitBtn.disabled = false;
+                    adminAuthSubmitBtn.textContent = 'Unlock Admin Panel';
+                }
+            }
+
+            adminAuthSubmitBtn.addEventListener('click', submitAdminPassword);
+            adminPanelPassInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') submitAdminPassword();
+            });
+        }
+
+        // Close Admin Dashboard
+        if (adminDashboardCloseBtn) {
+            adminDashboardCloseBtn.addEventListener('click', () => {
+                adminPanelModal.classList.remove('visible');
+            });
+        }
+
+        // Close Admin Panel on backdrop click
+        if (adminPanelModal) {
+            adminPanelModal.addEventListener('click', (e) => {
+                if (e.target === adminPanelModal) {
+                    adminPanelModal.classList.remove('visible');
+                }
+            });
+        }
+
+        // Admin Autostart Toggle
+        if (adminAutostartToggle) {
+            adminAutostartToggle.addEventListener('change', async () => {
+                const desired = adminAutostartToggle.checked;
+                try {
+                    const res = await fetch('/api/autostart', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Arth-Signature': INTEGRITY_TOKEN
+                        },
+                        body: JSON.stringify({ enabled: desired, password: verifiedAdminPassword })
+                    });
+                    const result = await res.json();
+                    if (res.ok && result.success) {
+                        showToast(desired ? 'Start with Windows enabled (runs silently in background on boot)' : 'Start with Windows disabled', 'success');
+                    } else {
+                        adminAutostartToggle.checked = !desired;
+                        showToast(result.error || 'Failed to update autostart setting', 'error');
+                    }
+                } catch (e) {
+                    adminAutostartToggle.checked = !desired;
+                    showToast('Error updating autostart setting', 'error');
+                }
+            });
+        }
+
+        // Admin Shutdown Button
+        if (adminShutdownBtn) {
+            adminShutdownBtn.addEventListener('click', async () => {
+                if (!confirm('Are you sure you want to stop the local background server?')) {
+                    return;
+                }
+                try {
+                    const res = await fetch('/api/system/shutdown', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Arth-Signature': INTEGRITY_TOKEN
+                        },
+                        body: JSON.stringify({ password: verifiedAdminPassword })
+                    });
+                    if (res.ok) {
+                        adminPanelModal.classList.remove('visible');
+                        document.body.innerHTML = `
+                            <div style="display:flex; align-items:center; justify-content:center; min-height:100vh; background:#0c0e11; color:#f0f3f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align:center;">
+                                <div style="padding: 24px; border: 1px solid #242930; border-radius: 12px; background: #14171b; max-width: 400px;">
+                                    <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(45, 104, 196, 0.15); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
+                                    </div>
+                                    <h2 style="font-size:20px; font-weight:600; margin-bottom:8px;">Local File Hub Stopped</h2>
+                                    <p style="color:#8d96a0; font-size:13px; line-height:1.5;">The background server has been safely stopped. You can close this browser tab.</p>
+                                </div>
+                            </div>`;
+                    } else {
+                        showToast('Failed to stop server', 'error');
+                    }
+                } catch (e) {
+                    showToast('Error sending shutdown command', 'error');
+                }
+            });
+        }
+
         // Search Input
         searchInput.addEventListener('input', (e) => {
             searchQuery = e.target.value;
@@ -643,83 +760,7 @@
             }
         });
 
-        // Host Autostart Toggle with Password Authentication (2026)
-        if (autostartToggle) {
-            autostartToggle.addEventListener('click', (e) => {
-                e.preventDefault(); // Pause toggle until password is confirmed
-                const desiredState = !autostartToggle.checked;
-
-                promptHostPassword(
-                    'Windows Startup Autostart',
-                    desiredState
-                        ? 'Enter password (2026) to enable background autostart on boot.'
-                        : 'Enter password (2026) to disable background autostart.',
-                    async (password) => {
-                        try {
-                            const res = await fetch('/api/autostart', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'X-Arth-Signature': INTEGRITY_TOKEN
-                                },
-                                body: JSON.stringify({ enabled: desiredState, password: password })
-                            });
-                            const result = await res.json();
-                            if (res.ok && result.success) {
-                                autostartToggle.checked = desiredState;
-                                showToast(desiredState ? 'Windows autostart enabled (runs in background on boot)' : 'Windows autostart disabled', 'success');
-                            } else {
-                                showToast(result.error || 'Password invalid or autostart update failed', 'error');
-                            }
-                        } catch (err) {
-                            showToast('Error connecting to server for autostart', 'error');
-                        }
-                    }
-                );
-            });
-        }
-
-        // Host Shutdown Button with Password Authentication (2026)
-        if (shutdownBtn) {
-            shutdownBtn.addEventListener('click', () => {
-                promptHostPassword(
-                    'Stop Local File Server',
-                    'Enter password (2026) to gracefully stop the local background server.',
-                    async (password) => {
-                        try {
-                            const res = await fetch('/api/system/shutdown', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'X-Arth-Signature': INTEGRITY_TOKEN
-                                },
-                                body: JSON.stringify({ password: password })
-                            });
-                            const result = await res.json();
-                            if (res.ok && result.success) {
-                                showToast('Server has been shut down.', 'info');
-                                document.body.innerHTML = `
-                                    <div style="display:flex; align-items:center; justify-content:center; min-height:100vh; background:#0c0e11; color:#f0f3f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align:center;">
-                                        <div style="padding: 24px; border: 1px solid #242930; border-radius: 12px; background: #14171b; max-width: 400px;">
-                                            <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(45, 104, 196, 0.15); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
-                                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
-                                            </div>
-                                            <h2 style="font-size:20px; font-weight:600; margin-bottom:8px;">Local File Hub Stopped</h2>
-                                            <p style="color:#8d96a0; font-size:13px; line-height:1.5;">The background server has been safely stopped. You can close this browser tab.</p>
-                                        </div>
-                                    </div>`;
-                            } else {
-                                showToast(result.error || 'Invalid password to stop server.', 'error');
-                            }
-                        } catch (err) {
-                            showToast('Error sending shutdown command', 'error');
-                        }
-                    }
-                );
-            });
-        }
-
-        // Modal Controls
+        // Delete Modal Controls
         modalCancelBtn.addEventListener('click', closeDeleteModal);
         modalConfirmDeleteBtn.addEventListener('click', executeDelete);
         deleteModal.addEventListener('click', (e) => {
