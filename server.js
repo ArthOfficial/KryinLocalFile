@@ -630,20 +630,32 @@ function getProcessOnPort(port) {
 function promptKillProcess(port, proc) {
     if (process.platform !== 'win32') return false;
     try {
-        const title = 'Kryin Local File Hub - Port In Use';
-        const msg = `Port ${port} is currently in use by another application:`
-            + `\`n\`n  • Application:  ${proc.name}`
-            + `\`n  • Process ID:   ${proc.pid}`
-            + `\`n  • Command:      taskkill /F /PID ${proc.pid}`
-            + `\`n\`nWould you like to terminate this process and free port ${port}?`
-            + `\`n\`n• Click [YES] to terminate ${proc.name} (taskkill) and start on port ${port}.`
-            + `\`n• Click [NO] to keep it running and automatically switch to the next available port.`;
+        const title = 'Kryin Local File Hub - Port Conflict';
+        const lines = [
+            `Port ${port} is currently in use by another application:`,
+            '',
+            `  • Application:  ${proc.name}`,
+            `  • Process ID:   ${proc.pid}`,
+            `  • Kill Command: taskkill /F /PID ${proc.pid}`,
+            '',
+            `Would you like to terminate this process to free port ${port}?`,
+            '',
+            `• Click [YES] to terminate ${proc.name} and start on port ${port}.`,
+            `• Click [NO]  to keep it running and automatically switch to the next port.`
+        ];
 
-        const escapedMsg = msg.replace(/'/g, "''");
-        const escapedTitle = title.replace(/'/g, "''");
-        const cmd = `powershell.exe -WindowStyle Hidden -NoProfile -Command "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('${escapedMsg}', '${escapedTitle}', 'YesNo', 'Question')"`;
+        const psScript = `
+Add-Type -AssemblyName PresentationFramework
+$msg = @"
+${lines.join('\r\n')}
+"@
+$res = [System.Windows.MessageBox]::Show($msg, '${title}', 'YesNo', 'Question')
+Write-Output $res
+`;
+        const encoded = Buffer.from(psScript, 'utf16le').toString('base64');
+        const cmd = `powershell.exe -WindowStyle Hidden -NoProfile -EncodedCommand ${encoded}`;
         const result = execSync(cmd, { encoding: 'utf8' }).trim();
-        return result === 'Yes';
+        return result.includes('Yes');
     } catch (e) {
         return false;
     }
@@ -661,9 +673,16 @@ function killProcess(pid) {
 function showNativeAlert(title, message) {
     if (process.platform === 'win32') {
         try {
-            const escapedMsg = message.replace(/'/g, "''").replace(/\r?\n/g, '`n');
-            const escapedTitle = title.replace(/'/g, "''");
-            const cmd = `powershell.exe -WindowStyle Hidden -NoProfile -Command "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('${escapedMsg}', '${escapedTitle}', 'OK', 'Warning') | Out-Null;"`;
+            const cleanMsg = message.replace(/\r?\n/g, '\r\n');
+            const psScript = `
+Add-Type -AssemblyName PresentationFramework
+$msg = @"
+${cleanMsg}
+"@
+[System.Windows.MessageBox]::Show($msg, '${title}', 'OK', 'Warning') | Out-Null
+`;
+            const encoded = Buffer.from(psScript, 'utf16le').toString('base64');
+            const cmd = `powershell.exe -WindowStyle Hidden -NoProfile -EncodedCommand ${encoded}`;
             execSync(cmd, { stdio: 'ignore' });
         } catch (e) {}
     }
