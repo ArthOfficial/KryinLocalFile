@@ -116,7 +116,15 @@ app.get('/', (req, res) => {
 });
 
 // Helper: Resolve Real LAN IP (ignores VirtualBox, WSL, Hyper-V, Docker, and loopbacks)
+let _cachedLanIp = null;
+let _cachedLanIpTime = 0;
+
 function getRealLanIp() {
+    const now = Date.now();
+    if (_cachedLanIp && (now - _cachedLanIpTime < 15000)) {
+        return _cachedLanIp;
+    }
+
     const ifaces = os.networkInterfaces();
     const candidates = [];
 
@@ -156,7 +164,9 @@ function getRealLanIp() {
 
     // Prioritize active Wi-Fi / physical Ethernet over other adapters
     candidates.sort((a, b) => (b.isWifi ? 1 : 0) - (a.isWifi ? 1 : 0));
-    return candidates[0] ? candidates[0].address : '127.0.0.1';
+    _cachedLanIp = candidates[0] ? candidates[0].address : '127.0.0.1';
+    _cachedLanIpTime = now;
+    return _cachedLanIp;
 }
 
 // Helper: Detect if incoming request originates from the local host computer
@@ -614,7 +624,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     if (!isBackground && config.autoOpenBrowser !== false) {
         try {
             if (process.platform === 'win32') {
-                exec(`start ${localUrl}`);
+                exec(`start "" "${localUrl}"`);
             } else if (process.platform === 'darwin') {
                 exec(`open ${localUrl}`);
             } else {

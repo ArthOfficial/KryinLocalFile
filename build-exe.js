@@ -30,8 +30,8 @@ try {
     }
 
     // 3. Bundle entire backend + dependencies into a single JS file with esbuild
-    console.log('[2/6] Bundling backend and dependencies with esbuild...');
-    execSync('npx --yes esbuild server.js --bundle --platform=node --target=node24 --outfile=dist/bundle.js', {
+    console.log('[2/6] Bundling backend and dependencies with esbuild (minified)...');
+    execSync('npx --yes esbuild server.js --bundle --minify --platform=node --target=node24 --outfile=dist/bundle.js', {
         stdio: 'inherit',
         cwd: ROOT_DIR
     });

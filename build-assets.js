@@ -17,10 +17,12 @@ const _assets = {
     _j: "${appJsB64}"
 };
 
+let _html = null, _css = null, _js = null;
+
 module.exports = {
-    get indexHtml() { return _d(_assets._h); },
-    get styleCss() { return _d(_assets._s); },
-    get appJs() { return _d(_assets._j); },
+    get indexHtml() { if (!_html) _html = _d(_assets._h); return _html; },
+    get styleCss() { if (!_css) _css = _d(_assets._s); return _css; },
+    get appJs() { if (!_js) _js = _d(_assets._j); return _js; },
     rawAssets: _assets
 };
 `;
