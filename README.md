@@ -51,11 +51,10 @@ Packaged as a standalone portable Windows executable (`KryinLocalFile.exe`) with
 
 ## ✨ Features
 
-- 🖥️ **Zero-Console Execution & Native Companion Window**: Compiled with the Windows GUI PE subsystem. Double-clicking the `.exe` opens an instant, dark-themed native Companion Controller with the custom Kryin logo. It appears directly in your **Windows Taskbar ("window bar / minimized tab")** and **System Tray**, allowing you to minimize, restore, copy LAN links, open the browser dashboard, or stop the server cleanly in 1 click.
-- 🎨 **Custom Brand Logo & Favicon**: Crisp geometric file & LAN emblem with embedded high-resolution icons for the browser tab, web UI header, Windows taskbar, and notification area.
-- ⚡ **Instant Multi-Launch Protection**: Intelligent single-instance lock file detects running servers in under 5ms, focusing the browser immediately without duplicate processes, slow port scanning, or freezing.
-- 📌 **Windows System Tray Integration**: Sits cleanly in the taskbar notification tray. Right-click menu allows you to open dashboard in browser, show controller, copy LAN link, change port/config, or cleanly stop the server just like Docker Desktop.
-- ⚙️ **Host Admin Control Panel**: Dedicated, password-protected control modal accessible only to the host computer. Customize the server HTTP port, update host administrator passwords, configure Windows autostart, inspect live network IPs, and control background server processes.
+- 🖥️ **Zero-Console Execution & Instant Launch**: Compiled with the Windows GUI PE subsystem. Double-clicking the `.exe` starts silently with zero scary command prompt popups or flickering terminal windows, automatically launching your default browser directly to the dashboard in milliseconds.
+- 🛑 **One-Click Quick Stop Server**: Terminate the server cleanly anytime right from the top navigation bar with a dedicated host-authenticated Red Stop button, without needing Task Manager or terminal commands.
+- ⚡ **Instant Multi-Launch Protection**: Intelligent single-instance lock detects running servers in under 5ms, focusing the browser immediately without duplicate processes, slow port scanning, or freezing.
+- ⚙️ **Host Admin Control Panel**: Dedicated, password-protected control modal accessible only to the host computer. Customize the server HTTP port, update host administrator passwords, configure Windows autostart, inspect live network IPs, and shut down background processes.
 - 🔄 **Windows Autostart (Background Service)**: Toggle "Start with Windows" directly from the Admin Panel. Runs silently in the background on startup (`--background`) ready for LAN requests.
 - ⚡ **High-Speed Chunked Streaming**: Automatically slices large files into 50MB chunks with automatic retry logic and server-side reassembly, easily handling 10GB+ files without memory leaks.
 - 📱 **Cross-Platform LAN Sharing**: Connect any phone, tablet, or computer on the same Wi-Fi using the displayed real Wi-Fi IP address.
