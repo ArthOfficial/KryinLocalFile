@@ -40,7 +40,7 @@ if (!fs.existsSync(TEMP_DIR)) {
 
 // Load configuration
 let config = {
-    port: 3000,
+    port: 20260,
     adminPassword: 'kryinadmin',
     hostActionPassword: '2026',
     allowRemoteDeleteWithPassword: true,
@@ -55,7 +55,7 @@ if (fs.existsSync(configPath)) {
     }
 }
 
-let PORT = process.env.PORT || config.port || 3000;
+let PORT = process.env.PORT || config.port || 20260;
 let ADMIN_PASSWORD = config.adminPassword || 'kryinadmin';
 let HOST_ACTION_PASSWORD = config.hostActionPassword || '2026';
 
@@ -273,6 +273,8 @@ app.get('/api/status', (req, res) => {
         serverIp: realLanIp,
         lanUrl: `http://${realLanIp}:${PORT}`,
         port: PORT,
+        configuredPort: config.port,
+        fallbackFromPort: portFallbackOccurred ? originalRequestedPort : null,
         author: AUTHOR_INFO.author,
         portfolio: AUTHOR_INFO.portfolio,
         github: AUTHOR_INFO.github,
@@ -600,44 +602,53 @@ app.use((req, res) => {
     res.status(404).send('Local File Hub: UI files not found');
 });
 
-// Server Initialization
-const server = app.listen(PORT, '0.0.0.0', () => {
-    const realLanIp = getRealLanIp();
-    const localUrl = `http://localhost:${PORT}`;
-    const networkUrl = `http://${realLanIp}:${PORT}`;
-
-    console.log('\n======================================================');
-    console.log('  LOCAL FILE HUB - CREATED BY ARTH PUROHIT');
-    console.log('  Portfolio: https://arth-hub.vercel.app/');
-    console.log('  GitHub:    https://github.com/ArthOfficial');
-    console.log('======================================================');
-    console.log(`  Local Host Access:   ${localUrl}`);
-    console.log(`  LAN Network Access:  ${networkUrl}  <-- Share this with other devices!`);
-    console.log(`  Storage Directory:   ${CLOUD_DIR}`);
-    console.log(`  Host Deletion:       DIRECT (No password needed on host)`);
-    console.log(`  Remote Deletion:     PASSWORD PROTECTED`);
-    console.log(`  Host Actions Pass:   PASSWORD PROTECTED`);
-    console.log('======================================================\n');
-
-    // Auto-open browser on manual launch (unless --background flag is passed)
-    const isBackground = process.argv.includes('--background') || process.argv.includes('-b') || process.argv.includes('--silent');
-    if (!isBackground && config.autoOpenBrowser !== false) {
+// Native Windows Alert dialog for zero-console GUI executable error reporting
+function showNativeAlert(title, message) {
+    if (process.platform === 'win32') {
         try {
-            if (process.platform === 'win32') {
-                exec(`start "" "${localUrl}"`);
-            } else if (process.platform === 'darwin') {
-                exec(`open ${localUrl}`);
-            } else {
-                exec(`xdg-open ${localUrl}`);
-            }
+            const escapedMsg = message.replace(/'/g, "''").replace(/\r?\n/g, '`n');
+            const escapedTitle = title.replace(/'/g, "''");
+            const cmd = `powershell.exe -WindowStyle Hidden -NoProfile -Command "[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null; [System.Windows.Forms.MessageBox]::Show('${escapedMsg}', '${escapedTitle}', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning);"`;
+            exec(cmd);
         } catch (e) {}
     }
-});
+}
 
-// Single-instance handling: If port is already in use, open browser immediately and exit cleanly
-server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
+// Server Lifecycle & Multi-Tier Port Conflict Resolution
+let serverInstance = null;
+let originalRequestedPort = PORT;
+let portFallbackOccurred = false;
+
+function startServer(targetPort, attemptsLeft = 10) {
+    const server = app.listen(targetPort, '0.0.0.0');
+
+    server.on('listening', () => {
+        PORT = targetPort;
+        if (PORT !== originalRequestedPort) {
+            portFallbackOccurred = true;
+        }
+
+        const realLanIp = getRealLanIp();
         const localUrl = `http://localhost:${PORT}`;
+        const networkUrl = `http://${realLanIp}:${PORT}`;
+
+        console.log('\n======================================================');
+        console.log('  LOCAL FILE HUB - CREATED BY ARTH PUROHIT');
+        console.log('  Portfolio: https://arth-hub.vercel.app/');
+        console.log('  GitHub:    https://github.com/ArthOfficial');
+        console.log('======================================================');
+        console.log(`  Local Host Access:   ${localUrl}`);
+        console.log(`  LAN Network Access:  ${networkUrl}  <-- Share this with other devices!`);
+        console.log(`  Storage Directory:   ${CLOUD_DIR}`);
+        console.log(`  Host Deletion:       DIRECT (No password needed on host)`);
+        console.log(`  Remote Deletion:     PASSWORD PROTECTED`);
+        console.log(`  Host Actions Pass:   PASSWORD PROTECTED`);
+        if (portFallbackOccurred) {
+            console.log(`  Port Notice:         Original port ${originalRequestedPort} was occupied. Auto-shifted to ${PORT}.`);
+        }
+        console.log('======================================================\n');
+
+        // Auto-open browser on manual launch (unless --background flag is passed)
         const isBackground = process.argv.includes('--background') || process.argv.includes('-b') || process.argv.includes('--silent');
         if (!isBackground && config.autoOpenBrowser !== false) {
             try {
@@ -650,14 +661,68 @@ server.on('error', (err) => {
                 }
             } catch (e) {}
         }
-        setTimeout(() => process.exit(0), 200);
-    } else {
-        console.error('Server error:', err);
-        process.exit(1);
-    }
-});
+    });
 
-// Upload connection stability
-server.requestTimeout = 0;
-server.headersTimeout = 0;
-server.timeout = 0;
+    server.on('error', async (err) => {
+        if (err.code === 'EADDRINUSE') {
+            // Tier 1: Is Kryin Local File Hub already running on this port?
+            let isOurAppRunning = false;
+            try {
+                const checkRes = await fetch(`http://127.0.0.1:${targetPort}/api/status`, {
+                    headers: { 'X-Arth-Signature': AUTHOR_SIGNATURE },
+                    signal: AbortSignal.timeout(600)
+                });
+                const json = await checkRes.json().catch(() => ({}));
+                if (json.app === 'Local File Hub') {
+                    isOurAppRunning = true;
+                }
+            } catch (e) {
+                isOurAppRunning = false;
+            }
+
+            if (isOurAppRunning) {
+                // Single-Instance: Open browser to existing server and exit
+                const localUrl = `http://localhost:${targetPort}`;
+                const isBackground = process.argv.includes('--background') || process.argv.includes('-b') || process.argv.includes('--silent');
+                if (!isBackground && config.autoOpenBrowser !== false) {
+                    try {
+                        if (process.platform === 'win32') {
+                            exec(`start "" "${localUrl}"`);
+                        } else if (process.platform === 'darwin') {
+                            exec(`open ${localUrl}`);
+                        } else {
+                            exec(`xdg-open ${localUrl}`);
+                        }
+                    } catch (e) {}
+                }
+                setTimeout(() => process.exit(0), 200);
+                return;
+            }
+
+            // Tier 2: Port occupied by another application. Try next available port
+            if (attemptsLeft > 0 && targetPort < 65535) {
+                console.warn(`Notice: Port ${targetPort} is occupied by another program. Trying port ${targetPort + 1}...`);
+                return startServer(targetPort + 1, attemptsLeft - 1);
+            }
+
+            // Tier 3: All fallback ports exhausted. Show native Windows GUI Alert
+            showNativeAlert(
+                'Kryin Local File Hub - Port Conflict',
+                `Could not start server on port ${originalRequestedPort} (or subsequent fallback ports).\n\nThe port is currently in use by another application.\n\nPlease close the conflicting program or choose a different port in config.json.`
+            );
+            process.exit(1);
+        } else {
+            console.error('Server initialization error:', err);
+            process.exit(1);
+        }
+    });
+
+    // Upload connection stability
+    server.requestTimeout = 0;
+    server.headersTimeout = 0;
+    server.timeout = 0;
+    serverInstance = server;
+    return server;
+}
+
+startServer(PORT, 10);
