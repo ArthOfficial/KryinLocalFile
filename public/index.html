@@ -47,21 +47,14 @@
                     <button type="button" class="copy-ip-btn" id="copy-lan-btn" title="Copy LAN URL">Copy</button>
                 </div>
 
-                <!-- Host-Only Controls (Start with Windows & Stop Server) -->
-                <div class="host-controls" id="host-controls" style="display: none;">
-                    <label class="autostart-toggle-wrap" title="Run automatically in background when Windows starts (Requires password 2026)">
-                        <span class="toggle-label">Start with Windows</span>
-                        <input type="checkbox" id="autostart-toggle">
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <button id="shutdown-btn" class="action-btn danger-btn" title="Shut down the local server (Requires password 2026)">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
-                            <line x1="12" y1="2" x2="12" y2="12"></line>
-                        </svg>
-                        <span>Stop Server</span>
-                    </button>
-                </div>
+                <!-- Host-Only Admin Panel Button -->
+                <button id="admin-panel-btn" class="action-btn admin-btn" style="display: none;" title="Open Host Admin Panel">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                    <span>Admin</span>
+                </button>
 
                 <div class="stats-counter" id="storage-stats">0 files</div>
                 <button id="refresh-btn" class="action-btn" title="Refresh directory file list (does not reload the page)" aria-label="Refresh">
@@ -170,34 +163,103 @@
         </a>
     </div>
 
-    <!-- Host Action Password Modal (For Start with Windows and Stop Server) -->
-    <div class="modal-backdrop" id="host-action-modal">
-        <div class="modal-dialog">
-            <div class="modal-header">
-                <div class="modal-icon-wrap">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                    </svg>
+    <!-- Host Admin Panel Modal -->
+    <div class="modal-backdrop" id="admin-panel-modal">
+        <div class="modal-dialog admin-dialog">
+            <!-- Stage 1: Password Prompt -->
+            <div id="admin-auth-stage">
+                <div class="modal-header">
+                    <div class="modal-icon-wrap">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="modal-title">Host Admin Access</h3>
+                        <p class="modal-description">Enter host password (default: 2026) to open the control panel.</p>
+                    </div>
                 </div>
-                <div>
-                    <h3 class="modal-title" id="host-action-title">Host Verification</h3>
-                    <p class="modal-description" id="host-action-subtitle">Enter the password (2026) to authorize this action.</p>
+                <div class="modal-body">
+                    <div class="password-field-group">
+                        <label for="admin-panel-pass-input" class="field-label">Host Admin Password</label>
+                        <input type="password" id="admin-panel-pass-input" class="field-input"
+                            placeholder="Enter password (2026)..." autocomplete="off">
+                        <span class="field-hint">Required to manage Windows startup autostart and host settings.</span>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" id="admin-auth-cancel-btn">Cancel</button>
+                    <button type="button" class="btn-primary" id="admin-auth-submit-btn">Unlock Admin Panel</button>
                 </div>
             </div>
 
-            <div class="modal-body">
-                <div class="password-field-group">
-                    <label for="host-password-input" class="field-label">Host Password</label>
-                    <input type="password" id="host-password-input" class="field-input"
-                        placeholder="Enter password (2026)..." autocomplete="off">
-                    <span class="field-hint">Required to change Windows startup autostart or stop the background server.</span>
+            <!-- Stage 2: Admin Dashboard -->
+            <div id="admin-dashboard-stage" style="display: none;">
+                <div class="modal-header">
+                    <div class="modal-icon-wrap admin-badge-wrap">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="modal-title">Host Admin Control Panel</h3>
+                        <p class="modal-description">Local host server configuration & background service management.</p>
+                    </div>
                 </div>
-            </div>
 
-            <div class="modal-actions">
-                <button type="button" class="btn-secondary" id="host-action-cancel-btn">Cancel</button>
-                <button type="button" class="btn-primary" id="host-action-confirm-btn">Confirm</button>
+                <div class="modal-body admin-panel-body">
+                    <!-- Setting: Windows Autostart -->
+                    <div class="admin-setting-card">
+                        <div class="setting-info">
+                            <span class="setting-title">Start with Windows (Background Service)</span>
+                            <span class="setting-desc">Automatically starts the server silently on boot without terminal or browser popup.</span>
+                        </div>
+                        <label class="autostart-toggle-wrap">
+                            <input type="checkbox" id="admin-autostart-toggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <!-- Info: Real LAN Network -->
+                    <div class="admin-info-card">
+                        <div class="info-row">
+                            <span class="info-label">Active LAN IP:</span>
+                            <span class="info-value" id="admin-lan-ip">127.0.0.1</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">LAN Share URL:</span>
+                            <span class="info-value text-accent" id="admin-lan-url">http://localhost:3000</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Storage Folder:</span>
+                            <span class="info-value">./cloud</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">HTTP Server Port:</span>
+                            <span class="info-value" id="admin-server-port">3000</span>
+                        </div>
+                    </div>
+
+                    <!-- Power Actions -->
+                    <div class="admin-danger-zone">
+                        <div class="danger-zone-header">
+                            <span class="danger-title">Server Power Actions</span>
+                            <span class="danger-desc">Stop the local background process cleanly.</span>
+                        </div>
+                        <button type="button" class="btn-danger" id="admin-shutdown-btn">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                                <line x1="12" y1="2" x2="12" y2="12"></line>
+                            </svg>
+                            <span>Stop Background Server</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" id="admin-dashboard-close-btn">Close</button>
+                </div>
             </div>
         </div>
     </div>
