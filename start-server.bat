@@ -1,7 +1,9 @@
 @echo off
-title Kryin Local File Hub
+title Local File Hub - Arth Purohit
 echo ========================================================
-echo   KRYIN LOCAL FILE HUB - SHARED STORAGE
+echo   LOCAL FILE HUB - SHARED STORAGE
+echo   Created by Arth Purohit (https://arth-hub.vercel.app/)
+echo   GitHub: https://github.com/ArthOfficial
 echo ========================================================
 echo.
 echo Starting local file server...
