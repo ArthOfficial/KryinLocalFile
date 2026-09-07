@@ -9,6 +9,44 @@
 
 Packaged as a standalone portable Windows executable (`KryinLocalFile.exe`) with **zero-console GUI execution** and a built-in **Windows Startup Background Service toggle**.
 
+<br>
+
+<div align="center">
+  <img src="screenshots/01-dashboard.png" alt="Kryin Local File Hub Dashboard" width="850" style="border-radius: 8px; border: 1px solid #30363d;">
+  <p><em>Sleek, dark minimalist engineering UI for lightning-fast LAN file sharing and streaming.</em></p>
+</div>
+
+---
+
+## 📸 Interface Showcase
+
+<table width="100%">
+  <tr>
+    <td width="50%" align="center">
+      <b>Host Admin Control Panel</b><br>
+      <sub>Locked port editor, background service autostart, & power actions</sub><br><br>
+      <img src="screenshots/02-admin-panel.png" alt="Host Admin Panel" width="100%" style="border-radius: 6px;">
+    </td>
+    <td width="50%" align="center">
+      <b>Security Credentials Modal</b><br>
+      <sub>Decoupled administrator password updating popup dialog</sub><br><br>
+      <img src="screenshots/03-change-password.png" alt="Change Password Modal" width="100%" style="border-radius: 6px;">
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <b>Cross-Platform Mobile Interface</b><br>
+      <sub>Direct responsive touch UI for phones and tablets on Wi-Fi</sub><br><br>
+      <img src="screenshots/04-mobile-view.png" alt="Mobile UI View" width="70%" style="border-radius: 6px;">
+    </td>
+    <td width="50%" align="center">
+      <b>Web Dashboard & LAN Sync</b><br>
+      <sub>Dynamic Wi-Fi IP display, chunked upload stream, & category filtering</sub><br><br>
+      <img src="screenshots/01-dashboard.png" alt="Main Web Dashboard" width="100%" style="border-radius: 6px;">
+    </td>
+  </tr>
+</table>
+
 ---
 
 ## ✨ Features
