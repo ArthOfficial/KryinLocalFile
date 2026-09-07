@@ -67,8 +67,8 @@ Packaged as a standalone portable Windows executable (`KryinLocalFile.exe`) with
 
 1. Download or locate `KryinLocalFile.exe`.
 2. Double-click **`KryinLocalFile.exe`**.
-3. Your default browser will automatically open to `http://localhost:3000`.
-4. Other devices on your local Wi-Fi can connect to `http://<YOUR_LOCAL_IP>:3000`.
+3. Your default browser will automatically open to `http://localhost:20260`.
+4. Other devices on your local Wi-Fi can connect to `http://<YOUR_LOCAL_IP>:20260`.
 
 ### Option 2: Run from Source
 
@@ -92,7 +92,7 @@ You can customize port, password, and browser behavior in `config.json`:
 
 ```json
 {
-  "port": 3000,
+  "port": 20260,
   "adminPassword": "kryinadmin",
   "allowRemoteDeleteWithPassword": true,
   "autoOpenBrowser": true
@@ -101,10 +101,12 @@ You can customize port, password, and browser behavior in `config.json`:
 
 | Field | Type | Description | Default |
 |---|---|---|---|
-| `port` | `number` | Port for the HTTP server to listen on | `3000` |
-| `adminPassword` | `string` | Password required by remote LAN devices to delete files | `"kryinadmin"` |
+| `port` | `number` | Port for the HTTP server to listen on (auto-falls back if port is occupied) | `20260` |
+| `adminPassword` | `string` | Password required by remote LAN devices to delete files & manage settings | `"kryinadmin"` |
 | `allowRemoteDeleteWithPassword` | `boolean` | Allow remote network users to delete files with password | `true` |
 | `autoOpenBrowser` | `boolean` | Automatically open default browser on manual launch | `true` |
+
+> **Smart Port Conflict Resolution**: If port `20260` is occupied by another application, KryinLocalFile will automatically try sequential fallback ports (`20261`, `20262`, etc.) and notify you in the UI. If another instance of KryinLocalFile is already running, it brings up your browser tab instantly without starting a duplicate server. If all ports fail, a native Windows alert box guides you to edit `config.json`.
 
 ---
 
