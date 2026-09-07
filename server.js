@@ -357,10 +357,6 @@ app.post('/api/admin/update-settings', (req, res) => {
         ADMIN_PASSWORD = config.adminPassword;
         changed = true;
     }
-        config.adminPassword = newRemotePassword.trim();
-        ADMIN_PASSWORD = config.adminPassword;
-        changed = true;
-    }
 
     // Update Server Port
     if (newPort) {
