@@ -6,6 +6,11 @@ echo   Created by Arth Purohit (https://arth-hub.vercel.app/)
 echo   GitHub: https://github.com/ArthOfficial
 echo ========================================================
 echo.
-echo Starting local file server...
-node server.js
-pause
+if exist "%~dp0KryinLocalFile.exe" (
+    echo Starting KryinLocalFile.exe standalone binary...
+    start "" "%~dp0KryinLocalFile.exe"
+) else (
+    echo Starting local file server via Node.js...
+    node server.js
+    pause
+)
