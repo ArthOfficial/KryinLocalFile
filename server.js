@@ -314,6 +314,18 @@ app.post('/api/system/shutdown', (req, res) => {
     }, 1000);
 });
 
+// API: Verify host admin password for opening admin panel
+app.post('/api/admin/verify', (req, res) => {
+    if (!isHostRequest(req)) {
+        return res.status(403).json({ success: false, error: 'Permission Denied: Only the host computer can access admin settings.' });
+    }
+    const { password } = req.body || {};
+    if (password === HOST_ACTION_PASSWORD) {
+        return res.json({ success: true });
+    }
+    return res.status(401).json({ success: false, error: 'Incorrect host admin password.' });
+});
+
 // API: Verify admin password for remote client deletion
 app.post('/api/verify-password', (req, res) => {
     const { password } = req.body || {};
