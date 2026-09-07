@@ -177,14 +177,14 @@
                     </div>
                     <div>
                         <h3 class="modal-title">Host Admin Access</h3>
-                        <p class="modal-description">Enter host password (default: 2026) to open the control panel.</p>
+                        <p class="modal-description">Enter host admin password to open the control panel.</p>
                     </div>
                 </div>
                 <div class="modal-body">
                     <div class="password-field-group">
                         <label for="admin-panel-pass-input" class="field-label">Host Admin Password</label>
                         <input type="password" id="admin-panel-pass-input" class="field-input"
-                            placeholder="Enter password (2026)..." autocomplete="off">
+                            placeholder="Enter admin password..." autocomplete="off">
                         <span class="field-hint">Required to manage Windows startup autostart and host settings.</span>
                     </div>
                 </div>
@@ -238,6 +238,28 @@
                         <div class="info-row">
                             <span class="info-label">HTTP Server Port:</span>
                             <span class="info-value" id="admin-server-port">3000</span>
+                        </div>
+                    </div>
+
+                    <!-- Setting: Server & Admin Configuration -->
+                    <div class="admin-config-card">
+                        <div class="config-card-header">
+                            <span class="setting-title">Server & Admin Configuration</span>
+                            <span class="setting-desc">Configure server port and host administrator password.</span>
+                        </div>
+                        <div class="config-fields-grid">
+                            <div class="config-field">
+                                <label for="config-port-input" class="config-label">Server Port</label>
+                                <input type="number" id="config-port-input" class="field-input config-input" min="80" max="65535" placeholder="3000">
+                            </div>
+                            <div class="config-field">
+                                <label for="config-password-input" class="config-label">New Admin Password</label>
+                                <input type="password" id="config-password-input" class="field-input config-input" placeholder="Enter new password (optional)" autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="config-footer">
+                            <span class="config-note">Port change is saved to config.json and takes effect on restart.</span>
+                            <button type="button" class="btn-primary" id="admin-save-config-btn">Save Configuration</button>
                         </div>
                     </div>
 
