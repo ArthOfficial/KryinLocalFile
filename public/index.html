@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kryin Local File Hub — Shared Network Storage</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-layout">
+        <!-- Top Navigation / Status Header -->
+        <header class="app-header">
+            <div class="brand-area">
+                <div class="brand-symbol">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <span class="brand-title">Kryin Local File Hub</span>
+                    <span class="brand-status" id="connection-badge">
+                        <span class="status-dot"></span>
+                        <span id="connection-label">Connecting...</span>
+                    </span>
+                </div>
+            </div>
+
+            <div class="header-actions">
+                <!-- Host-Only Controls (Autostart & Shutdown) -->
+                <div class="host-controls" id="host-controls" style="display: none;">
+                    <label class="autostart-toggle-wrap" title="Run automatically in background when Windows starts">
+                        <span class="toggle-label">Start with Windows</span>
+                        <input type="checkbox" id="autostart-toggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <button id="shutdown-btn" class="action-btn danger-btn" title="Shut down the local server">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                            <line x1="12" y1="2" x2="12" y2="12"></line>
+                        </svg>
+                        <span>Stop Server</span>
+                    </button>
+                </div>
+
+                <div class="stats-counter" id="storage-stats">0 files</div>
+                <button id="refresh-btn" class="action-btn" title="Refresh file list" aria-label="Refresh">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                    <span>Refresh</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <main class="main-content">
+            <!-- Upload Dropzone Section -->
+            <section class="dropzone-section">
+                <div class="dropzone-card" id="drop-zone" tabindex="0" role="button" aria-label="Upload files">
+                    <input type="file" id="file-input" multiple hidden>
+                    <div class="dropzone-body">
+                        <div class="dropzone-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                        </div>
+                        <div class="dropzone-text">
+                            <span class="dropzone-prompt">Drop files to upload, or <span
+                                    class="browse-link">browse</span></span>
+                            <span class="dropzone-hint">Supports files of any size via fast chunked streaming</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Upload Progress Card -->
+                <div class="upload-progress-card" id="progress-container">
+                    <div class="progress-meta">
+                        <div class="progress-file-info">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                                <polyline points="13 2 13 9 20 9"></polyline>
+                            </svg>
+                            <span class="progress-filename" id="progress-filename">filename.bin</span>
+                        </div>
+                        <span class="progress-percentage" id="progress-percent">0%</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-bar" id="progress-fill"></div>
+                    </div>
+                    <div class="progress-sub">
+                        <span id="progress-detail">Preparing transfer...</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- File Management Section -->
+            <section class="files-container">
+                <div class="files-toolbar">
+                    <div class="search-wrapper">
+                        <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input type="text" id="search-input" class="search-input" placeholder="Filter files by name..."
+                            autocomplete="off">
+                    </div>
+                    <div class="filter-pills">
+                        <button class="filter-pill active" data-filter="all">All</button>
+                        <button class="filter-pill" data-filter="docs">Documents</button>
+                        <button class="filter-pill" data-filter="media">Media</button>
+                        <button class="filter-pill" data-filter="archives">Archives</button>
+                    </div>
+                </div>
+
+                <!-- Files List Card -->
+                <div class="files-card">
+                    <ul id="file-list" class="file-list">
+                        <!-- Rendered by app.js -->
+                    </ul>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Kryin Watermark Dock -->
+    <div id="kryin-watermark" class="kryin-watermark-dock">
+        <span class="watermark-label">Powered by</span>
+        <span class="author-name">Kryin Local File Hub</span>
+    </div>
+
+    <!-- Delete Confirmation & Auth Modal -->
+    <div class="modal-backdrop" id="delete-modal">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <div class="modal-icon-wrap">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="modal-title">Delete File</h3>
+                    <p class="modal-description" id="delete-modal-subtitle">Permanently remove this file from local storage.</p>
+                </div>
+            </div>
+
+            <div class="modal-body">
+                <div class="file-target-chip" id="delete-target-filename">file.ext</div>
+
+                <!-- Password prompt shown only for remote clients -->
+                <div class="password-field-group" id="delete-password-group" style="display: none;">
+                    <label for="admin-password-input" class="field-label">Host Admin Password</label>
+                    <input type="password" id="admin-password-input" class="field-input"
+                        placeholder="Enter admin password..." autocomplete="off">
+                    <span class="field-hint">Deletion requires authentication from the host server.</span>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" id="modal-cancel-btn">Cancel</button>
+                <button type="button" class="btn-danger" id="modal-confirm-delete-btn">Delete Permanently</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast-notification" role="status" aria-live="polite"></div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
