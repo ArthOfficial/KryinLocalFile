@@ -55,9 +55,9 @@ if (fs.existsSync(configPath)) {
     }
 }
 
-const PORT = process.env.PORT || config.port || 3000;
-const ADMIN_PASSWORD = config.adminPassword || 'kryinadmin';
-const HOST_ACTION_PASSWORD = config.hostActionPassword || '2026';
+let PORT = process.env.PORT || config.port || 3000;
+let ADMIN_PASSWORD = config.adminPassword || 'kryinadmin';
+let HOST_ACTION_PASSWORD = config.hostActionPassword || '2026';
 
 // App Tokens & Author Info
 const AUTHOR_SIGNATURE = 'ARTH_PUROHIT_VERIFIED_AUTH';
@@ -317,13 +317,71 @@ app.post('/api/system/shutdown', (req, res) => {
 // API: Verify host admin password for opening admin panel
 app.post('/api/admin/verify', (req, res) => {
     if (!isHostRequest(req)) {
-        return res.status(403).json({ success: false, error: 'Permission Denied: Only the host computer can access admin settings.' });
+        return res.status(403).json({ success: false, error: 'Permission Denied: Only host computer can access admin settings.' });
     }
     const { password } = req.body || {};
     if (password === HOST_ACTION_PASSWORD) {
         return res.json({ success: true });
     }
-    return res.status(401).json({ success: false, error: 'Incorrect host admin password.' });
+    return res.status(401).json({ success: false, error: 'Access Denied: Invalid admin password. Unauthorized attempt recorded.' });
+});
+
+// API: Update Host Configuration (Port & Admin Passwords)
+app.post('/api/admin/update-settings', (req, res) => {
+    if (!isHostRequest(req)) {
+        return res.status(403).json({ error: 'Permission Denied: Only host computer can change server settings.' });
+    }
+    const { currentPassword, newAdminPassword, newPort, newRemotePassword } = req.body || {};
+
+    if (currentPassword !== HOST_ACTION_PASSWORD) {
+        return res.status(401).json({ error: 'Access Denied: Current admin password is incorrect.' });
+    }
+
+    let changed = false;
+
+    // Update Host Admin Password
+    if (newAdminPassword && typeof newAdminPassword === 'string' && newAdminPassword.trim().length >= 3) {
+        config.hostActionPassword = newAdminPassword.trim();
+        HOST_ACTION_PASSWORD = config.hostActionPassword;
+        changed = true;
+    }
+
+    // Update Remote Client Delete Password
+    if (newRemotePassword && typeof newRemotePassword === 'string' && newRemotePassword.trim().length >= 3) {
+        config.adminPassword = newRemotePassword.trim();
+        ADMIN_PASSWORD = config.adminPassword;
+        changed = true;
+    }
+
+    // Update Server Port
+    if (newPort) {
+        const portNum = parseInt(newPort, 10);
+        if (isNaN(portNum) || portNum < 80 || portNum > 65535) {
+            return res.status(400).json({ error: 'Port must be a valid number between 80 and 65535.' });
+        }
+        config.port = portNum;
+        PORT = portNum;
+        changed = true;
+    }
+
+    if (changed) {
+        try {
+            fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+            return res.json({
+                success: true,
+                message: 'Configuration updated and saved to config.json successfully.',
+                config: {
+                    port: config.port,
+                    hostActionPassword: config.hostActionPassword,
+                    adminPassword: config.adminPassword
+                }
+            });
+        } catch (e) {
+            return res.status(500).json({ error: 'Failed to write configuration to file: ' + e.message });
+        }
+    }
+
+    return res.status(400).json({ error: 'No configuration changes were specified.' });
 });
 
 // API: Verify admin password for remote client deletion
