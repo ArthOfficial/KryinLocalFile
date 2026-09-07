@@ -289,7 +289,7 @@ app.post('/api/autostart', (req, res) => {
     }
     const { enabled, password } = req.body || {};
     if (password !== HOST_ACTION_PASSWORD) {
-        return res.status(401).json({ error: 'Invalid password. Enter 2026 to change autostart settings.' });
+        return res.status(401).json({ error: 'Access Denied: Wrong attempt. Unauthorized attempt recorded.' });
     }
     setAutostart(!!enabled, (err, newState) => {
         if (err) {
@@ -306,7 +306,7 @@ app.post('/api/system/shutdown', (req, res) => {
     }
     const { password } = req.body || {};
     if (password !== HOST_ACTION_PASSWORD) {
-        return res.status(401).json({ error: 'Invalid password. Enter 2026 to stop the server.' });
+        return res.status(401).json({ error: 'Access Denied: Wrong attempt. Unauthorized attempt recorded.' });
     }
     res.json({ success: true, message: 'Local File Hub is shutting down...' });
     setTimeout(() => {
@@ -323,7 +323,7 @@ app.post('/api/admin/verify', (req, res) => {
     if (password === HOST_ACTION_PASSWORD) {
         return res.json({ success: true });
     }
-    return res.status(401).json({ success: false, error: 'Access Denied: Invalid admin password. Unauthorized attempt recorded.' });
+    return res.status(401).json({ success: false, error: 'Access Denied: Wrong attempt. Unauthorized attempt recorded.' });
 });
 
 // API: Update Host Configuration (Port & Admin Passwords)
@@ -334,20 +334,29 @@ app.post('/api/admin/update-settings', (req, res) => {
     const { currentPassword, newAdminPassword, newPort, newRemotePassword } = req.body || {};
 
     if (currentPassword !== HOST_ACTION_PASSWORD) {
-        return res.status(401).json({ error: 'Access Denied: Current admin password is incorrect.' });
+        return res.status(401).json({ error: 'Access Denied: Wrong attempt. Current admin password is incorrect.' });
     }
 
     let changed = false;
 
     // Update Host Admin Password
-    if (newAdminPassword && typeof newAdminPassword === 'string' && newAdminPassword.trim().length >= 3) {
+    if (newAdminPassword && typeof newAdminPassword === 'string' && newAdminPassword.trim().length > 0) {
+        if (newAdminPassword.trim().length < 3) {
+            return res.status(400).json({ error: 'New password must be at least 3 characters long.' });
+        }
         config.hostActionPassword = newAdminPassword.trim();
         HOST_ACTION_PASSWORD = config.hostActionPassword;
+        config.adminPassword = config.hostActionPassword;
+        ADMIN_PASSWORD = config.adminPassword;
         changed = true;
     }
 
-    // Update Remote Client Delete Password
+    // Update Remote Client Delete Password (if specifically provided)
     if (newRemotePassword && typeof newRemotePassword === 'string' && newRemotePassword.trim().length >= 3) {
+        config.adminPassword = newRemotePassword.trim();
+        ADMIN_PASSWORD = config.adminPassword;
+        changed = true;
+    }
         config.adminPassword = newRemotePassword.trim();
         ADMIN_PASSWORD = config.adminPassword;
         changed = true;
@@ -390,7 +399,7 @@ app.post('/api/verify-password', (req, res) => {
     if (password === ADMIN_PASSWORD) {
         return res.json({ success: true });
     }
-    return res.status(401).json({ success: false, error: 'Invalid password. Only host server user has direct access.' });
+    return res.status(401).json({ success: false, error: 'Access Denied: Wrong attempt. Unauthorized attempt recorded.' });
 });
 
 // API: List files in cloud directory
@@ -600,8 +609,8 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`  LAN Network Access:  ${networkUrl}  <-- Share this with other devices!`);
     console.log(`  Storage Directory:   ${CLOUD_DIR}`);
     console.log(`  Host Deletion:       DIRECT (No password needed on host)`);
-    console.log(`  Remote Deletion:     PASSWORD PROTECTED (${ADMIN_PASSWORD})`);
-    console.log(`  Host Actions Pass:   PROTECTED (Password: ${HOST_ACTION_PASSWORD})`);
+    console.log(`  Remote Deletion:     PASSWORD PROTECTED`);
+    console.log(`  Host Actions Pass:   PASSWORD PROTECTED`);
     console.log('======================================================\n');
 
     // Auto-open browser on manual launch (unless --background flag is passed)
