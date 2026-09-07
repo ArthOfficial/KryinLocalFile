@@ -50,6 +50,16 @@ try {
     }
     fs.copyFileSync(process.execPath, OUTPUT_EXE);
 
+    // Strip stale digital signature entry so Windows treats it as a clean unsigned binary instead of a corrupted signature
+    const fdPrep = fs.openSync(OUTPUT_EXE, 'r+');
+    const prepBuf = Buffer.alloc(1024);
+    fs.readSync(fdPrep, prepBuf, 0, 1024, 0);
+    const peOffsetPrep = prepBuf.readUInt32LE(0x3c);
+    const magicPrep = prepBuf.readUInt16LE(peOffsetPrep + 24);
+    const certDirOffset = peOffsetPrep + 24 + (magicPrep === 0x20b ? 112 : 96) + 4 * 8;
+    fs.writeSync(fdPrep, Buffer.alloc(8, 0), 0, 8, certDirOffset);
+    fs.closeSync(fdPrep);
+
     // 6. Inject blob into exe using postject
     console.log('[5/6] Injecting application blob into binary...');
     execSync(

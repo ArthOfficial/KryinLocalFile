@@ -634,6 +634,29 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     }
 });
 
+// Single-instance handling: If port is already in use, open browser immediately and exit cleanly
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        const localUrl = `http://localhost:${PORT}`;
+        const isBackground = process.argv.includes('--background') || process.argv.includes('-b') || process.argv.includes('--silent');
+        if (!isBackground && config.autoOpenBrowser !== false) {
+            try {
+                if (process.platform === 'win32') {
+                    exec(`start "" "${localUrl}"`);
+                } else if (process.platform === 'darwin') {
+                    exec(`open ${localUrl}`);
+                } else {
+                    exec(`xdg-open ${localUrl}`);
+                }
+            } catch (e) {}
+        }
+        setTimeout(() => process.exit(0), 200);
+    } else {
+        console.error('Server error:', err);
+        process.exit(1);
+    }
+});
+
 // Upload connection stability
 server.requestTimeout = 0;
 server.headersTimeout = 0;
