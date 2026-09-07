@@ -1,8 +1,12 @@
 /**
- * Kryin Local File Hub - Storage & Sharing Server
+ * Local File Hub - Storage & Sharing Server
  * =========================================================================
- * Fast, lightweight peer-to-peer LAN storage, chunked streaming file upload,
- * Windows autostart background execution, and zero-console browser launcher.
+ * Author: Arth Purohit (https://arth-hub.vercel.app/)
+ * GitHub: https://github.com/ArthOfficial
+ * Copyright (c) Arth Purohit. All rights reserved.
+ * 
+ * Fast peer-to-peer LAN storage, chunked streaming file upload, real Wi-Fi IP
+ * resolution, Windows autostart background execution, and zero-console browser launcher.
  * =========================================================================
  */
 
@@ -10,8 +14,8 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const cors = require('cors');
-const ip = require('ip');
 const { exec } = require('child_process');
 
 // App & Core Path Resolutions (Compatible with both Node.js and standalone .exe builds)
@@ -38,6 +42,7 @@ if (!fs.existsSync(TEMP_DIR)) {
 let config = {
     port: 3000,
     adminPassword: 'kryinadmin',
+    hostActionPassword: '2026',
     allowRemoteDeleteWithPassword: true,
     autoOpenBrowser: true
 };
@@ -52,12 +57,15 @@ if (fs.existsSync(configPath)) {
 
 const PORT = process.env.PORT || config.port || 3000;
 const ADMIN_PASSWORD = config.adminPassword || 'kryinadmin';
+const HOST_ACTION_PASSWORD = config.hostActionPassword || '2026';
 
-// App Tokens & Metadata
-const AUTHOR_SIGNATURE = 'KRYIN_LOCAL_FILE_VERIFIED';
+// App Tokens & Author Info
+const AUTHOR_SIGNATURE = 'ARTH_PUROHIT_VERIFIED_AUTH';
 const AUTHOR_INFO = {
-    app: 'Kryin Local File Hub',
-    version: '1.0.0'
+    author: 'Arth Purohit',
+    portfolio: 'https://arth-hub.vercel.app/',
+    github: 'https://github.com/ArthOfficial',
+    app: 'Local File Hub'
 };
 
 let embeddedAssets = null;
@@ -107,27 +115,73 @@ app.get('/', (req, res) => {
     res.status(404).send('Not found');
 });
 
+// Helper: Resolve Real LAN IP (ignores VirtualBox, WSL, Hyper-V, Docker, and loopbacks)
+function getRealLanIp() {
+    const ifaces = os.networkInterfaces();
+    const candidates = [];
+
+    for (const [name, addrs] of Object.entries(ifaces)) {
+        const lower = name.toLowerCase();
+        // Skip virtual / container / bridge / tunnel adapters
+        if (
+            lower.includes('wsl') ||
+            lower.includes('vethernet') ||
+            lower.includes('virtual') ||
+            lower.includes('vbox') ||
+            lower.includes('vmware') ||
+            lower.includes('loopback') ||
+            lower.includes('pseudo') ||
+            lower.includes('docker') ||
+            lower.includes('tap') ||
+            lower.includes('vpn') ||
+            lower.includes('host-only')
+        ) {
+            continue;
+        }
+
+        for (const a of addrs) {
+            if (a.family === 'IPv4' && !a.internal) {
+                // Skip VirtualBox host-only default network 192.168.56.x and APIPA
+                if (a.address.startsWith('192.168.56.') || a.address.startsWith('169.254.')) {
+                    continue;
+                }
+                candidates.push({
+                    name,
+                    address: a.address,
+                    isWifi: lower.includes('wi-fi') || lower.includes('wlan') || lower.includes('wireless')
+                });
+            }
+        }
+    }
+
+    // Prioritize active Wi-Fi / physical Ethernet over other adapters
+    candidates.sort((a, b) => (b.isWifi ? 1 : 0) - (a.isWifi ? 1 : 0));
+    return candidates[0] ? candidates[0].address : '127.0.0.1';
+}
+
 // Helper: Detect if incoming request originates from the local host computer
 function isHostRequest(req) {
     const remoteAddr = req.socket.remoteAddress || req.connection?.remoteAddress || '';
     const cleanIp = remoteAddr.replace('::ffff:', '').trim();
-    const serverIp = ip.address();
+    const realLanIp = getRealLanIp();
 
     return (
         cleanIp === '127.0.0.1' ||
         cleanIp === '::1' ||
         cleanIp === 'localhost' ||
-        cleanIp === serverIp
+        cleanIp === realLanIp
     );
 }
 
 // Middleware: Integrity check on mutative API requests
 function verifySystemIntegrity(req, res, next) {
-    const sig = req.headers['x-kryin-signature'];
+    const sig = req.headers['x-arth-signature'];
     if (sig && sig !== AUTHOR_SIGNATURE) {
         return res.status(423).json({
             error: 'System signature mismatch.',
-            app: AUTHOR_INFO.app
+            author: AUTHOR_INFO.author,
+            portfolio: AUTHOR_INFO.portfolio,
+            github: AUTHOR_INFO.github
         });
     }
     next();
@@ -138,7 +192,6 @@ const REG_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
 const REG_VAL = 'KryinLocalFile';
 
 function getExePath() {
-    // If standalone exe exists in root, prefer it for autostart
     const targetExe = path.join(ROOT_DIR, 'KryinLocalFile.exe');
     if (fs.existsSync(targetExe)) {
         return targetExe;
@@ -176,7 +229,6 @@ function setAutostart(enable, callback) {
     } else {
         const cmd = `reg delete "${REG_KEY}" /v "${REG_VAL}" /f`;
         exec(cmd, () => {
-            // Deleted or was not present
             callback(null, false);
         });
     }
@@ -195,22 +247,26 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 10 * 1024 * 1024 * 1024 } // 10 GB limit per legacy upload
+    limits: { fileSize: 10 * 1024 * 1024 * 1024 } // 10 GB limit
 });
 
 // ============================================
 //  CORE API ENDPOINTS
 // ============================================
 
-// API: System status and Host / Client detection
+// API: System status, Real LAN IP, and Host / Client detection
 app.get('/api/status', (req, res) => {
     const isHost = isHostRequest(req);
+    const realLanIp = getRealLanIp();
     res.json({
         isHost: isHost,
-        serverIp: ip.address(),
+        serverIp: realLanIp,
+        lanUrl: `http://${realLanIp}:${PORT}`,
         port: PORT,
+        author: AUTHOR_INFO.author,
+        portfolio: AUTHOR_INFO.portfolio,
+        github: AUTHOR_INFO.github,
         app: AUTHOR_INFO.app,
-        version: AUTHOR_INFO.version,
         allowRemoteDelete: config.allowRemoteDeleteWithPassword
     });
 });
@@ -226,12 +282,15 @@ app.get('/api/autostart', (req, res) => {
     });
 });
 
-// API: Toggle Windows Autostart (Host Only)
+// API: Toggle Windows Autostart (Host Only with Password Protection)
 app.post('/api/autostart', (req, res) => {
     if (!isHostRequest(req)) {
-        return res.status(403).json({ error: 'Permission Denied: Only the host machine can configure autostart.' });
+        return res.status(403).json({ error: 'Permission Denied: Only the host computer can configure autostart.' });
     }
-    const { enabled } = req.body || {};
+    const { enabled, password } = req.body || {};
+    if (password !== HOST_ACTION_PASSWORD) {
+        return res.status(401).json({ error: 'Invalid password. Enter 2026 to change autostart settings.' });
+    }
     setAutostart(!!enabled, (err, newState) => {
         if (err) {
             return res.status(500).json({ error: 'Failed to update Windows registry', details: err.message });
@@ -240,12 +299,16 @@ app.post('/api/autostart', (req, res) => {
     });
 });
 
-// API: Gracefully Shut Down Server (Host Only)
+// API: Gracefully Shut Down Server (Host Only with Password Protection)
 app.post('/api/system/shutdown', (req, res) => {
     if (!isHostRequest(req)) {
-        return res.status(403).json({ error: 'Permission Denied: Only the host machine can stop the server.' });
+        return res.status(403).json({ error: 'Permission Denied: Only the host computer can stop the server.' });
     }
-    res.json({ success: true, message: 'Kryin Local File Hub is shutting down...' });
+    const { password } = req.body || {};
+    if (password !== HOST_ACTION_PASSWORD) {
+        return res.status(401).json({ error: 'Invalid password. Enter 2026 to stop the server.' });
+    }
+    res.json({ success: true, message: 'Local File Hub is shutting down...' });
     setTimeout(() => {
         process.exit(0);
     }, 1000);
@@ -449,22 +512,26 @@ app.use((req, res) => {
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.send(embeddedAssets.indexHtml);
     }
-    res.status(404).send('Kryin Local File Hub: UI files not found');
+    res.status(404).send('Local File Hub: UI files not found');
 });
 
 // Server Initialization
 const server = app.listen(PORT, '0.0.0.0', () => {
+    const realLanIp = getRealLanIp();
     const localUrl = `http://localhost:${PORT}`;
-    const networkUrl = `http://${ip.address()}:${PORT}`;
+    const networkUrl = `http://${realLanIp}:${PORT}`;
 
     console.log('\n======================================================');
-    console.log('  KRYIN LOCAL FILE HUB');
+    console.log('  LOCAL FILE HUB - CREATED BY ARTH PUROHIT');
+    console.log('  Portfolio: https://arth-hub.vercel.app/');
+    console.log('  GitHub:    https://github.com/ArthOfficial');
     console.log('======================================================');
     console.log(`  Local Host Access:   ${localUrl}`);
-    console.log(`  LAN Network Access:  ${networkUrl}`);
+    console.log(`  LAN Network Access:  ${networkUrl}  <-- Share this with other devices!`);
     console.log(`  Storage Directory:   ${CLOUD_DIR}`);
     console.log(`  Host Deletion:       DIRECT (No password needed on host)`);
     console.log(`  Remote Deletion:     PASSWORD PROTECTED (${ADMIN_PASSWORD})`);
+    console.log(`  Host Actions Pass:   PROTECTED (Password: ${HOST_ACTION_PASSWORD})`);
     console.log('======================================================\n');
 
     // Auto-open browser on manual launch (unless --background flag is passed)
