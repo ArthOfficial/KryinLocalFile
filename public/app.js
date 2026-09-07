@@ -63,9 +63,24 @@
     const adminLanIp = document.getElementById('admin-lan-ip');
     const adminLanUrl = document.getElementById('admin-lan-url');
     const adminServerPort = document.getElementById('admin-server-port');
-    const configPortInput = document.getElementById('config-port-input');
-    const configPasswordInput = document.getElementById('config-password-input');
-    const adminSaveConfigBtn = document.getElementById('admin-save-config-btn');
+
+    // Port Setting Elements
+    const portViewMode = document.getElementById('port-view-mode');
+    const currentPortText = document.getElementById('current-port-text');
+    const unlockPortBtn = document.getElementById('unlock-port-btn');
+    const portEditMode = document.getElementById('port-edit-mode');
+    const editPortInput = document.getElementById('edit-port-input');
+    const savePortBtn = document.getElementById('save-port-btn');
+    const cancelPortBtn = document.getElementById('cancel-port-btn');
+
+    // Change Password Modal Elements
+    const openChangePasswordModalBtn = document.getElementById('open-change-password-modal-btn');
+    const changePasswordModal = document.getElementById('change-password-modal');
+    const cpOldPassword = document.getElementById('cp-old-password');
+    const cpNewPassword = document.getElementById('cp-new-password');
+    const cpConfirmPassword = document.getElementById('cp-confirm-password');
+    const cpCancelBtn = document.getElementById('cp-cancel-btn');
+    const cpSubmitBtn = document.getElementById('cp-submit-btn');
 
     // Progress Elements
     const progressContainer = document.getElementById('progress-container');
@@ -116,7 +131,8 @@
                 if (adminLanIp) adminLanIp.textContent = data.serverIp || '127.0.0.1';
                 if (adminLanUrl) adminLanUrl.textContent = currentLanUrl;
                 if (adminServerPort) adminServerPort.textContent = data.port || 3000;
-                if (configPortInput) configPortInput.value = data.port || 3000;
+                if (currentPortText) currentPortText.textContent = data.port || 3000;
+                if (editPortInput) editPortInput.value = data.port || 3000;
             } else {
                 dot.className = 'status-dot client';
                 connectionLabel.textContent = 'Connected via LAN';
@@ -689,81 +705,200 @@
             });
         }
 
-        // Admin Configuration Save (Port & Password)
-        if (adminSaveConfigBtn) {
-            adminSaveConfigBtn.addEventListener('click', async () => {
-                const newPortVal = configPortInput ? configPortInput.value.trim() : '';
-                const newPassVal = configPasswordInput ? configPasswordInput.value.trim() : '';
-
-                if (!newPortVal && !newPassVal) {
-                    showToast('No configuration changes entered.', 'warning');
-                    return;
-                }
-
-                let parsedPort = undefined;
-                if (newPortVal) {
-                    parsedPort = parseInt(newPortVal, 10);
-                    if (isNaN(parsedPort) || parsedPort < 80 || parsedPort > 65535) {
-                        showToast('Port must be a valid number between 80 and 65535.', 'error', 'Invalid Port');
-                        if (configPortInput) configPortInput.focus();
-                        return;
-                    }
-                }
-
-                if (newPassVal && newPassVal.length < 3) {
-                    showToast('New admin password must be at least 3 characters.', 'error', 'Invalid Password');
-                    if (configPasswordInput) configPasswordInput.focus();
-                    return;
-                }
-
-                adminSaveConfigBtn.disabled = true;
-                adminSaveConfigBtn.textContent = 'Saving...';
-
-                try {
-                    const res = await fetch('/api/admin/update-settings', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Arth-Signature': INTEGRITY_TOKEN
-                        },
-                        body: JSON.stringify({
-                            currentPassword: verifiedAdminPassword,
-                            newAdminPassword: newPassVal || undefined,
-                            newPort: parsedPort
-                        })
-                    });
-
-                    const result = await res.json();
-                    if (res.ok && result.success) {
-                        if (newPassVal) {
-                            verifiedAdminPassword = newPassVal;
-                            if (configPasswordInput) configPasswordInput.value = '';
-                        }
-                        if (parsedPort) {
-                            if (adminServerPort) adminServerPort.textContent = parsedPort;
-                            const ip = adminLanIp ? adminLanIp.textContent : '127.0.0.1';
-                            currentLanUrl = `http://${ip}:${parsedPort}`;
-                            if (adminLanUrl) adminLanUrl.textContent = currentLanUrl;
-                            if (lanUrlDisplay) lanUrlDisplay.textContent = currentLanUrl;
-                        }
-                        showToast(
-                            parsedPort
-                                ? `Configuration saved! Server port set to ${parsedPort} (restart server to apply port change).`
-                                : 'Host admin password updated successfully and saved to config.json.',
-                            'success',
-                            'Configuration Saved'
-                        );
-                    } else {
-                        showToast(result.error || 'Wrong attempt. Failed to save configuration.', 'error', 'Security Alert');
-                    }
-                } catch (err) {
-                    showToast('Network error while saving configuration', 'error');
-                } finally {
-                    adminSaveConfigBtn.disabled = false;
-                    adminSaveConfigBtn.textContent = 'Save Configuration';
+        // Port Change Workflow (Locked View -> Edit Mode -> Save)
+        if (unlockPortBtn && portViewMode && portEditMode) {
+            unlockPortBtn.addEventListener('click', () => {
+                portViewMode.style.display = 'none';
+                portEditMode.style.display = 'inline-flex';
+                if (editPortInput) {
+                    editPortInput.value = currentPortText ? currentPortText.textContent.trim() : '3000';
+                    editPortInput.focus();
+                    editPortInput.select();
                 }
             });
         }
+
+        if (cancelPortBtn && portViewMode && portEditMode) {
+            cancelPortBtn.addEventListener('click', () => {
+                portEditMode.style.display = 'none';
+                portViewMode.style.display = 'inline-flex';
+            });
+        }
+
+        async function submitPortChange() {
+            if (!editPortInput || !savePortBtn) return;
+            const portVal = editPortInput.value.trim();
+            if (!portVal) {
+                showToast('Please enter a server port number.', 'warning');
+                editPortInput.focus();
+                return;
+            }
+
+            const parsedPort = parseInt(portVal, 10);
+            if (isNaN(parsedPort) || parsedPort < 80 || parsedPort > 65535) {
+                showToast('Port must be a valid number between 80 and 65535.', 'error', 'Invalid Port');
+                editPortInput.focus();
+                return;
+            }
+
+            savePortBtn.disabled = true;
+            savePortBtn.textContent = 'Saving...';
+
+            try {
+                const res = await fetch('/api/admin/update-settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Arth-Signature': INTEGRITY_TOKEN
+                    },
+                    body: JSON.stringify({
+                        currentPassword: verifiedAdminPassword,
+                        newPort: parsedPort
+                    })
+                });
+
+                const result = await res.json();
+                if (res.ok && result.success) {
+                    if (currentPortText) currentPortText.textContent = parsedPort;
+                    if (adminServerPort) adminServerPort.textContent = parsedPort;
+                    const ip = adminLanIp ? adminLanIp.textContent : '127.0.0.1';
+                    currentLanUrl = `http://${ip}:${parsedPort}`;
+                    if (adminLanUrl) adminLanUrl.textContent = currentLanUrl;
+                    if (lanUrlDisplay) lanUrlDisplay.textContent = currentLanUrl;
+
+                    portEditMode.style.display = 'none';
+                    portViewMode.style.display = 'inline-flex';
+
+                    showToast(`Server port updated to ${parsedPort} and saved to config.json. Please restart server to apply network port change.`, 'success', 'Port Updated');
+                } else {
+                    showToast(result.error || 'Wrong attempt. Failed to save port.', 'error', 'Security Alert');
+                }
+            } catch (err) {
+                showToast('Network error while saving port: ' + err.message, 'error');
+            } finally {
+                savePortBtn.disabled = false;
+                savePortBtn.textContent = 'Save';
+            }
+        }
+
+        if (savePortBtn) savePortBtn.addEventListener('click', submitPortChange);
+        if (editPortInput) {
+            editPortInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') submitPortChange();
+                if (e.key === 'Escape' && cancelPortBtn) cancelPortBtn.click();
+            });
+        }
+
+        // Change Password Modal Popup Workflow
+        function openChangePasswordModal() {
+            if (!changePasswordModal) return;
+            changePasswordModal.classList.add('visible');
+            if (cpOldPassword) {
+                cpOldPassword.value = '';
+                setTimeout(() => cpOldPassword.focus(), 100);
+            }
+            if (cpNewPassword) cpNewPassword.value = '';
+            if (cpConfirmPassword) cpConfirmPassword.value = '';
+        }
+
+        function closeChangePasswordModal() {
+            if (!changePasswordModal) return;
+            changePasswordModal.classList.remove('visible');
+            if (cpOldPassword) cpOldPassword.value = '';
+            if (cpNewPassword) cpNewPassword.value = '';
+            if (cpConfirmPassword) cpConfirmPassword.value = '';
+        }
+
+        if (openChangePasswordModalBtn) {
+            openChangePasswordModalBtn.addEventListener('click', openChangePasswordModal);
+        }
+        if (cpCancelBtn) {
+            cpCancelBtn.addEventListener('click', closeChangePasswordModal);
+        }
+        if (changePasswordModal) {
+            changePasswordModal.addEventListener('click', (e) => {
+                if (e.target === changePasswordModal) closeChangePasswordModal();
+            });
+        }
+
+        async function submitPasswordChange() {
+            if (!cpSubmitBtn) return;
+            const oldPass = cpOldPassword ? cpOldPassword.value.trim() : '';
+            const newPass = cpNewPassword ? cpNewPassword.value.trim() : '';
+            const confirmPass = cpConfirmPassword ? cpConfirmPassword.value.trim() : '';
+
+            if (!oldPass) {
+                showToast('Please enter your current admin password.', 'warning', 'Password Required');
+                if (cpOldPassword) cpOldPassword.focus();
+                return;
+            }
+
+            if (!newPass) {
+                showToast('Please enter a new admin password.', 'warning', 'Password Required');
+                if (cpNewPassword) cpNewPassword.focus();
+                return;
+            }
+
+            if (newPass.length < 3) {
+                showToast('New password must be at least 3 characters long.', 'error', 'Invalid Password');
+                if (cpNewPassword) cpNewPassword.focus();
+                return;
+            }
+
+            if (newPass !== confirmPass) {
+                showToast('New passwords do not match. Please verify and re-enter.', 'error', 'Mismatch');
+                if (cpConfirmPassword) {
+                    cpConfirmPassword.value = '';
+                    cpConfirmPassword.focus();
+                }
+                return;
+            }
+
+            cpSubmitBtn.disabled = true;
+            cpSubmitBtn.textContent = 'Updating...';
+
+            try {
+                const res = await fetch('/api/admin/update-settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Arth-Signature': INTEGRITY_TOKEN
+                    },
+                    body: JSON.stringify({
+                        currentPassword: oldPass,
+                        newAdminPassword: newPass
+                    })
+                });
+
+                const result = await res.json();
+                if (res.ok && result.success) {
+                    verifiedAdminPassword = newPass;
+                    closeChangePasswordModal();
+                    showToast('Admin password updated successfully and saved to config.json.', 'success', 'Password Updated');
+                } else {
+                    showToast(result.error || 'Access Denied: Wrong attempt. Current password is incorrect.', 'error', 'Security Alert');
+                    if (cpOldPassword) {
+                        cpOldPassword.value = '';
+                        cpOldPassword.focus();
+                    }
+                }
+            } catch (err) {
+                showToast('Network error while updating password: ' + err.message, 'error');
+            } finally {
+                cpSubmitBtn.disabled = false;
+                cpSubmitBtn.textContent = 'Update Password';
+            }
+        }
+
+        if (cpSubmitBtn) cpSubmitBtn.addEventListener('click', submitPasswordChange);
+        [cpOldPassword, cpNewPassword, cpConfirmPassword].forEach(input => {
+            if (input) {
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') submitPasswordChange();
+                    if (e.key === 'Escape') closeChangePasswordModal();
+                });
+            }
+        });
 
         // Admin Shutdown Button
         if (adminShutdownBtn) {
