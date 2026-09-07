@@ -102,8 +102,9 @@ body {
 .brand-status {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    font-size: 12px;
+    gap: 5px;
+    font-size: 11px;
+    white-space: nowrap;
     color: var(--text-secondary);
 }
 
@@ -528,6 +529,21 @@ body {
     background: rgba(96, 165, 250, 0.16) !important;
     border-color: rgba(96, 165, 250, 0.45) !important;
     color: #bfdbfe !important;
+}
+
+/* Quick Stop Server Button (Red UI Icon) */
+.stop-server-btn {
+    color: #f87171 !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    background: rgba(239, 68, 68, 0.08) !important;
+    padding: 6px 9px !important;
+}
+
+.stop-server-btn:hover {
+    background: rgba(239, 68, 68, 0.2) !important;
+    border-color: rgba(239, 68, 68, 0.6) !important;
+    color: #fca5a5 !important;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.25);
 }
 
 /* Admin Panel Modal */

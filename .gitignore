@@ -16,3 +16,6 @@ FileManagerLocal.exe
 # OS / Environment files
 .DS_Store
 Thumbs.db
+
+# Backup archives
+*.zip

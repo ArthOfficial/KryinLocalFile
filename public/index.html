@@ -21,7 +21,10 @@
         <header class="app-header">
             <div class="brand-area">
                 <div class="brand-symbol">
-                    <img src="/logo.png" alt="Kryin Logo" width="28" height="28" style="border-radius: 6px; display: block;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                    </svg>
                 </div>
                 <div class="brand-text">
                     <span class="brand-title">Local File Hub</span>
@@ -46,13 +49,20 @@
                     <button type="button" class="copy-ip-btn" id="copy-lan-btn" title="Copy LAN URL">Copy</button>
                 </div>
 
-                <!-- Host-Only Admin Panel Button -->
-                <button id="admin-panel-btn" class="action-btn admin-btn" style="display: none;" title="Open Host Admin Panel">
+                <!-- Host-Only Admin Panel Button (Gear Icon only, no text) -->
+                <button id="admin-panel-btn" class="action-btn admin-btn" style="display: none;" title="Host Admin Settings" aria-label="Host Admin Settings">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="3"></circle>
                         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                     </svg>
-                    <span>Admin</span>
+                </button>
+
+                <!-- Host-Only Quick Stop Server Button (Red Power Icon) -->
+                <button id="quick-stop-server-btn" class="action-btn stop-server-btn" style="display: none;" title="Stop Server (Admin Password Required)" aria-label="Stop Server">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                        <line x1="12" y1="2" x2="12" y2="12"></line>
+                    </svg>
                 </button>
 
                 <div class="stats-counter" id="storage-stats">0 files</div>
@@ -381,6 +391,38 @@
             <div class="modal-actions">
                 <button type="button" class="btn-secondary" id="modal-cancel-btn">Cancel</button>
                 <button type="button" class="btn-danger" id="modal-confirm-delete-btn">Delete Permanently</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stop Server Confirmation & Password Modal -->
+    <div class="modal-backdrop" id="stop-server-modal">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <div class="modal-icon-wrap" style="color: #ef4444; background: rgba(239, 68, 68, 0.12);">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                        <line x1="12" y1="2" x2="12" y2="12"></line>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="modal-title">Stop Background Server</h3>
+                    <p class="modal-description">Enter host admin password to shut down the server.</p>
+                </div>
+            </div>
+
+            <div class="modal-body">
+                <div class="password-field-group">
+                    <label for="stop-server-pass-input" class="field-label">Host Admin Password</label>
+                    <input type="password" id="stop-server-pass-input" class="field-input"
+                        placeholder="Enter admin password..." autocomplete="off">
+                    <span class="field-hint">Default: <code>2026</code> (or <code>kryinadmin</code>).</span>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" id="stop-server-cancel-btn">Cancel</button>
+                <button type="button" class="btn-danger" id="stop-server-confirm-btn">Shut Down Server</button>
             </div>
         </div>
     </div>

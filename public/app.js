@@ -64,6 +64,13 @@
     const adminLanUrl = document.getElementById('admin-lan-url');
     const adminServerPort = document.getElementById('admin-server-port');
 
+    // Quick Stop Server UI Elements
+    const quickStopServerBtn = document.getElementById('quick-stop-server-btn');
+    const stopServerModal = document.getElementById('stop-server-modal');
+    const stopServerPassInput = document.getElementById('stop-server-pass-input');
+    const stopServerCancelBtn = document.getElementById('stop-server-cancel-btn');
+    const stopServerConfirmBtn = document.getElementById('stop-server-confirm-btn');
+
     // Port Setting Elements
     const portViewMode = document.getElementById('port-view-mode');
     const currentPortText = document.getElementById('current-port-text');
@@ -124,9 +131,12 @@
 
             if (isHostUser) {
                 dot.className = 'status-dot host';
-                connectionLabel.textContent = 'Server Host (Direct Access)';
+                connectionLabel.textContent = 'Host (Direct)';
                 if (adminPanelBtn) {
                     adminPanelBtn.style.display = 'inline-flex';
+                }
+                if (quickStopServerBtn) {
+                    quickStopServerBtn.style.display = 'inline-flex';
                 }
                 if (adminLanIp) adminLanIp.textContent = data.serverIp || '127.0.0.1';
                 if (adminLanUrl) adminLanUrl.textContent = currentLanUrl;
@@ -144,6 +154,9 @@
                 connectionLabel.textContent = 'Connected via LAN';
                 if (adminPanelBtn) {
                     adminPanelBtn.style.display = 'none';
+                }
+                if (quickStopServerBtn) {
+                    quickStopServerBtn.style.display = 'none';
                 }
             }
 
@@ -939,6 +952,90 @@
                 } catch (e) {
                     showToast('Error sending shutdown command', 'error');
                 }
+            });
+        }
+
+        // Quick Stop Server UI Handlers
+        function openStopServerModal() {
+            if (!stopServerModal) return;
+            if (verifiedAdminPassword && stopServerPassInput) {
+                stopServerPassInput.value = verifiedAdminPassword;
+            } else if (stopServerPassInput) {
+                stopServerPassInput.value = '';
+            }
+            stopServerModal.classList.add('visible');
+            setTimeout(() => {
+                if (stopServerPassInput) stopServerPassInput.focus();
+            }, 100);
+        }
+
+        function closeStopServerModal() {
+            if (stopServerModal) {
+                stopServerModal.classList.remove('visible');
+            }
+        }
+
+        async function submitStopServer() {
+            const pass = stopServerPassInput ? stopServerPassInput.value.trim() : '';
+            if (!pass) {
+                showToast('Please enter the host admin password.', 'warning', 'Password Required');
+                if (stopServerPassInput) stopServerPassInput.focus();
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/system/shutdown', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Arth-Signature': INTEGRITY_TOKEN
+                    },
+                    body: JSON.stringify({ password: pass })
+                });
+
+                if (res.ok) {
+                    closeStopServerModal();
+                    document.body.innerHTML = `
+                        <div style="display:flex; align-items:center; justify-content:center; min-height:100vh; background:#0b1120; color:#f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align:center;">
+                            <div style="padding: 32px 28px; border: 1px solid #1e293b; border-radius: 14px; background: #0f172a; max-width: 420px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);">
+                                <div style="width: 52px; height: 52px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; color: #ef4444;">
+                                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
+                                </div>
+                                <h2 style="font-size:22px; font-weight:700; margin-bottom:8px; color:#fff;">Server Safely Stopped</h2>
+                                <p style="color:#94a3b8; font-size:14px; line-height:1.5;">Local File Hub has been shut down. You may safely close this browser tab.</p>
+                            </div>
+                        </div>`;
+                } else {
+                    const data = await res.json().catch(() => ({}));
+                    showToast(data.error || 'Access Denied: Incorrect password.', 'error', 'Authentication Failed');
+                    if (stopServerPassInput) {
+                        stopServerPassInput.focus();
+                        stopServerPassInput.select();
+                    }
+                }
+            } catch (e) {
+                showToast('Error sending shutdown command.', 'error');
+            }
+        }
+
+        if (quickStopServerBtn) {
+            quickStopServerBtn.addEventListener('click', openStopServerModal);
+        }
+        if (stopServerCancelBtn) {
+            stopServerCancelBtn.addEventListener('click', closeStopServerModal);
+        }
+        if (stopServerConfirmBtn) {
+            stopServerConfirmBtn.addEventListener('click', submitStopServer);
+        }
+        if (stopServerPassInput) {
+            stopServerPassInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') submitStopServer();
+                if (e.key === 'Escape') closeStopServerModal();
+            });
+        }
+        if (stopServerModal) {
+            stopServerModal.addEventListener('click', (e) => {
+                if (e.target === stopServerModal) closeStopServerModal();
             });
         }
 
