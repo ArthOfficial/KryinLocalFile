@@ -1,8 +1,12 @@
 /**
- * Kryin Local File Hub - Client Application
+ * Local File Hub - Client Application
  * =========================================================================
- * Peer-to-peer LAN storage, chunked streaming file transfer,
- * Windows autostart background execution toggle, and host controls.
+ * Author: Arth Purohit (https://arth-hub.vercel.app/)
+ * GitHub: https://github.com/ArthOfficial
+ * Copyright (c) Arth Purohit. All rights reserved.
+ * 
+ * Peer-to-peer LAN storage, chunked streaming file transfer, real Wi-Fi IP
+ * sharing, password-protected Windows autostart & server shutdown host controls.
  * =========================================================================
  */
 
@@ -10,7 +14,9 @@
     'use strict';
 
     // Core Constants & Attribution Tokens
-    const INTEGRITY_TOKEN = 'KRYIN_LOCAL_FILE_VERIFIED';
+    const AUTHOR_NAME = 'Arth';
+    const AUTHOR_TARGET_URL = 'https://arth-hub.vercel.app/';
+    const INTEGRITY_TOKEN = 'ARTH_PUROHIT_VERIFIED_AUTH';
     const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB chunks
     const MAX_RETRIES = 3;
     const RETRY_DELAY_MS = 1500;
@@ -21,6 +27,7 @@
     let activeFilter = 'all';
     let searchQuery = '';
     let pendingDeleteTarget = null;
+    let currentLanUrl = '';
 
     // DOM Elements
     const dropZone = document.getElementById('drop-zone');
@@ -33,10 +40,23 @@
     const connectionBadge = document.getElementById('connection-badge');
     const connectionLabel = document.getElementById('connection-label');
 
+    // Real LAN Share Pill
+    const lanSharePill = document.getElementById('lan-share-pill');
+    const lanUrlDisplay = document.getElementById('lan-url-display');
+    const copyLanBtn = document.getElementById('copy-lan-btn');
+
     // Host Controls
     const hostControls = document.getElementById('host-controls');
     const autostartToggle = document.getElementById('autostart-toggle');
     const shutdownBtn = document.getElementById('shutdown-btn');
+
+    // Host Action Password Modal Elements
+    const hostActionModal = document.getElementById('host-action-modal');
+    const hostActionTitle = document.getElementById('host-action-title');
+    const hostActionSubtitle = document.getElementById('host-action-subtitle');
+    const hostPasswordInput = document.getElementById('host-password-input');
+    const hostActionCancelBtn = document.getElementById('host-action-cancel-btn');
+    const hostActionConfirmBtn = document.getElementById('host-action-confirm-btn');
 
     // Progress Elements
     const progressContainer = document.getElementById('progress-container');
@@ -64,16 +84,18 @@
         bindEvents();
     }
 
-    // System Status & Host Detection
+    // System Status, Real LAN IP, and Host Detection
     async function checkSystemStatus() {
         try {
             const res = await fetch('/api/status', {
-                headers: { 'X-Kryin-Signature': INTEGRITY_TOKEN }
+                headers: { 'X-Arth-Signature': INTEGRITY_TOKEN }
             });
             if (!res.ok) throw new Error('Status check failed');
             const data = await res.json();
 
             isHostUser = Boolean(data.isHost);
+            currentLanUrl = data.lanUrl || `http://${data.serverIp}:${data.port || 3000}`;
+
             const dot = connectionBadge.querySelector('.status-dot');
 
             if (isHostUser) {
@@ -90,6 +112,12 @@
                     hostControls.style.display = 'none';
                 }
             }
+
+            // Display Real LAN URL for sharing with other devices on Wi-Fi
+            if (lanSharePill && lanUrlDisplay && data.serverIp && data.serverIp !== '127.0.0.1') {
+                lanUrlDisplay.textContent = currentLanUrl;
+                lanSharePill.style.display = 'inline-flex';
+            }
         } catch (err) {
             const dot = connectionBadge.querySelector('.status-dot');
             dot.className = 'status-dot';
@@ -102,7 +130,7 @@
     async function initAutostartStatus() {
         try {
             const res = await fetch('/api/autostart', {
-                headers: { 'X-Kryin-Signature': INTEGRITY_TOKEN }
+                headers: { 'X-Arth-Signature': INTEGRITY_TOKEN }
             });
             if (!res.ok) return;
             const data = await res.json();
@@ -114,13 +142,52 @@
         }
     }
 
+    // Helper: Modal Password Prompt for Host Actions (Requires 2026)
+    function promptHostPassword(title, subtitle, onConfirm, onCancel) {
+        if (!hostActionModal) return;
+
+        hostActionTitle.textContent = title;
+        hostActionSubtitle.textContent = subtitle;
+        hostPasswordInput.value = '';
+        hostActionModal.classList.add('visible');
+        setTimeout(() => hostPasswordInput.focus(), 100);
+
+        function cleanup() {
+            hostActionModal.classList.remove('visible');
+            hostActionConfirmBtn.onclick = null;
+            hostActionCancelBtn.onclick = null;
+            hostPasswordInput.onkeydown = null;
+        }
+
+        hostActionCancelBtn.onclick = () => {
+            cleanup();
+            if (onCancel) onCancel();
+        };
+
+        hostActionConfirmBtn.onclick = () => {
+            const password = hostPasswordInput.value.trim();
+            if (!password) {
+                showToast('Please enter host password (default: 2026)', 'warning');
+                hostPasswordInput.focus();
+                return;
+            }
+            cleanup();
+            onConfirm(password);
+        };
+
+        hostPasswordInput.onkeydown = (e) => {
+            if (e.key === 'Enter') hostActionConfirmBtn.click();
+            if (e.key === 'Escape') hostActionCancelBtn.click();
+        };
+    }
+
     // ============================================
     //  FILE LISTING & FILTERING
     // ============================================
     async function loadFiles() {
         try {
             const res = await fetch('/api/files', {
-                headers: { 'X-Kryin-Signature': INTEGRITY_TOKEN }
+                headers: { 'X-Arth-Signature': INTEGRITY_TOKEN }
             });
             if (!res.ok) throw new Error('Failed to load files');
             allFiles = await res.json();
@@ -276,13 +343,13 @@
 
         const filename = pendingDeleteTarget;
         const headers = {
-            'X-Kryin-Signature': INTEGRITY_TOKEN
+            'X-Arth-Signature': INTEGRITY_TOKEN
         };
 
         if (!isHostUser) {
             const pass = adminPasswordInput.value.trim();
             if (!pass) {
-                showToast('Please enter the host admin password to authorize deletion.', 'warning', 'Password Required');
+                showToast('Please enter host admin password to authorize deletion.', 'warning', 'Password Required');
                 adminPasswordInput.focus();
                 return;
             }
@@ -371,7 +438,7 @@
             xhr.addEventListener('abort', () => reject(new Error('Upload transfer aborted.')));
 
             xhr.open('POST', '/api/upload');
-            xhr.setRequestHeader('X-Kryin-Signature', INTEGRITY_TOKEN);
+            xhr.setRequestHeader('X-Arth-Signature', INTEGRITY_TOKEN);
             xhr.send(formData);
         });
     }
@@ -418,7 +485,7 @@
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-Kryin-Signature': INTEGRITY_TOKEN
+                'X-Arth-Signature': INTEGRITY_TOKEN
             },
             body: JSON.stringify({
                 uploadId: uploadId,
@@ -462,7 +529,7 @@
             xhr.setRequestHeader('X-Chunk-Index', chunkIndex);
             xhr.setRequestHeader('X-Total-Chunks', totalChunks);
             xhr.setRequestHeader('X-Filename', encodeURIComponent(filename));
-            xhr.setRequestHeader('X-Kryin-Signature', INTEGRITY_TOKEN);
+            xhr.setRequestHeader('X-Arth-Signature', INTEGRITY_TOKEN);
             xhr.send(blob);
         });
     }
@@ -504,11 +571,37 @@
     //  EVENT BINDINGS
     // ============================================
     function bindEvents() {
-        // Refresh
-        refreshBtn.addEventListener('click', () => {
-            loadFiles();
-            checkSystemStatus();
+        // Refresh: Re-reads files and updates UI without full page reload
+        refreshBtn.addEventListener('click', async () => {
+            const icon = refreshBtn.querySelector('.refresh-icon');
+            if (icon) {
+                icon.classList.remove('spinning');
+                void icon.offsetWidth;
+                icon.classList.add('spinning');
+            }
+            await loadFiles();
+            await checkSystemStatus();
+            showToast(`File list refreshed (${allFiles.length} files)`, 'success');
         });
+
+        // Copy LAN URL button
+        if (copyLanBtn) {
+            copyLanBtn.addEventListener('click', async () => {
+                if (!currentLanUrl) return;
+                try {
+                    await navigator.clipboard.writeText(currentLanUrl);
+                    copyLanBtn.textContent = 'Copied!';
+                    copyLanBtn.classList.add('copied');
+                    showToast(`Copied ${currentLanUrl} to clipboard! Open this on your phone or laptop.`, 'success', 'URL Copied');
+                    setTimeout(() => {
+                        copyLanBtn.textContent = 'Copy';
+                        copyLanBtn.classList.remove('copied');
+                    }, 2000);
+                } catch (e) {
+                    showToast('Failed to copy to clipboard', 'error');
+                }
+            });
+        }
 
         // Search Input
         searchInput.addEventListener('input', (e) => {
@@ -550,61 +643,79 @@
             }
         });
 
-        // Host Autostart Toggle
+        // Host Autostart Toggle with Password Authentication (2026)
         if (autostartToggle) {
-            autostartToggle.addEventListener('change', async () => {
-                const desiredState = autostartToggle.checked;
-                try {
-                    const res = await fetch('/api/autostart', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Kryin-Signature': INTEGRITY_TOKEN
-                        },
-                        body: JSON.stringify({ enabled: desiredState })
-                    });
-                    const result = await res.json();
-                    if (result.success) {
-                        showToast(desiredState ? 'Windows autostart enabled (runs in background on boot)' : 'Windows autostart disabled', 'success');
-                    } else {
-                        autostartToggle.checked = !desiredState;
-                        showToast(result.error || 'Failed to update autostart setting', 'error');
+            autostartToggle.addEventListener('click', (e) => {
+                e.preventDefault(); // Pause toggle until password is confirmed
+                const desiredState = !autostartToggle.checked;
+
+                promptHostPassword(
+                    'Windows Startup Autostart',
+                    desiredState
+                        ? 'Enter password (2026) to enable background autostart on boot.'
+                        : 'Enter password (2026) to disable background autostart.',
+                    async (password) => {
+                        try {
+                            const res = await fetch('/api/autostart', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-Arth-Signature': INTEGRITY_TOKEN
+                                },
+                                body: JSON.stringify({ enabled: desiredState, password: password })
+                            });
+                            const result = await res.json();
+                            if (res.ok && result.success) {
+                                autostartToggle.checked = desiredState;
+                                showToast(desiredState ? 'Windows autostart enabled (runs in background on boot)' : 'Windows autostart disabled', 'success');
+                            } else {
+                                showToast(result.error || 'Password invalid or autostart update failed', 'error');
+                            }
+                        } catch (err) {
+                            showToast('Error connecting to server for autostart', 'error');
+                        }
                     }
-                } catch (e) {
-                    autostartToggle.checked = !desiredState;
-                    showToast('Error updating autostart setting', 'error');
-                }
+                );
             });
         }
 
-        // Host Shutdown Button
+        // Host Shutdown Button with Password Authentication (2026)
         if (shutdownBtn) {
-            shutdownBtn.addEventListener('click', async () => {
-                if (!confirm('Are you sure you want to stop the local file server?')) {
-                    return;
-                }
-                try {
-                    await fetch('/api/system/shutdown', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Kryin-Signature': INTEGRITY_TOKEN
+            shutdownBtn.addEventListener('click', () => {
+                promptHostPassword(
+                    'Stop Local File Server',
+                    'Enter password (2026) to gracefully stop the local background server.',
+                    async (password) => {
+                        try {
+                            const res = await fetch('/api/system/shutdown', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-Arth-Signature': INTEGRITY_TOKEN
+                                },
+                                body: JSON.stringify({ password: password })
+                            });
+                            const result = await res.json();
+                            if (res.ok && result.success) {
+                                showToast('Server has been shut down.', 'info');
+                                document.body.innerHTML = `
+                                    <div style="display:flex; align-items:center; justify-content:center; min-height:100vh; background:#0c0e11; color:#f0f3f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align:center;">
+                                        <div style="padding: 24px; border: 1px solid #242930; border-radius: 12px; background: #14171b; max-width: 400px;">
+                                            <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(45, 104, 196, 0.15); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+                                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
+                                            </div>
+                                            <h2 style="font-size:20px; font-weight:600; margin-bottom:8px;">Local File Hub Stopped</h2>
+                                            <p style="color:#8d96a0; font-size:13px; line-height:1.5;">The background server has been safely stopped. You can close this browser tab.</p>
+                                        </div>
+                                    </div>`;
+                            } else {
+                                showToast(result.error || 'Invalid password to stop server.', 'error');
+                            }
+                        } catch (err) {
+                            showToast('Error sending shutdown command', 'error');
                         }
-                    });
-                    showToast('Server has been shut down.', 'info');
-                    document.body.innerHTML = `
-                        <div style="display:flex; align-items:center; justify-content:center; min-height:100vh; background:#0c0e11; color:#f0f3f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align:center;">
-                            <div style="padding: 24px; border: 1px solid #242930; border-radius: 12px; background: #14171b; max-width: 400px;">
-                                <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(45, 104, 196, 0.15); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
-                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
-                                </div>
-                                <h2 style="font-size:20px; font-weight:600; margin-bottom:8px;">Kryin Local File Hub Stopped</h2>
-                                <p style="color:#8d96a0; font-size:13px; line-height:1.5;">The background server has been safely stopped. You can close this window.</p>
-                            </div>
-                        </div>`;
-                } catch (e) {
-                    showToast('Error sending shutdown command', 'error');
-                }
+                    }
+                );
             });
         }
 
